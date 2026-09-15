@@ -153,3 +153,62 @@ describe('deterministicFilter', () => {
     expect(filtered.find((c) => c.companyId === 'C1')).toBeTruthy();
   });
 });
+
+describe('Phase0 contract invariants', () => {
+  it('similarity weights sum to 1.0 with frozen Phase0 shares', async () => {
+    const { SIMILARITY_WEIGHTS } = await import('./types.js');
+    const sum = Object.values(SIMILARITY_WEIGHTS).reduce((a, b) => a + b, 0);
+    expect(sum).toBeCloseTo(1.0, 9);
+    expect(SIMILARITY_WEIGHTS.industry).toBe(0.2);
+    expect(SIMILARITY_WEIGHTS.services).toBe(0.2);
+    expect(SIMILARITY_WEIGHTS.customers).toBe(0.15);
+    expect(SIMILARITY_WEIGHTS.businessModel).toBe(0.15);
+    expect(SIMILARITY_WEIGHTS.size).toBe(0.1);
+    expect(SIMILARITY_WEIGHTS.ownership).toBe(0.05);
+    expect(SIMILARITY_WEIGHTS.geography).toBe(0.1);
+    expect(SIMILARITY_WEIGHTS.growth).toBe(0.05);
+  });
+
+  it('qualification uses 60% business + 40% strategic and ignores demo_fit poison', () => {
+    const ideal = buildCompanyDnaFromCsvRow(
+      row({ company_id: 'R1', company_name: 'Ref', demo_fit: 'reject' }),
+    );
+    const twinHigh = buildCompanyDnaFromCsvRow(
+      row({ company_id: 'C1', company_name: 'Twin', demo_fit: 'reject' }),
+    );
+    const twinLow = buildCompanyDnaFromCsvRow(
+      row({ company_id: 'C2', company_name: 'Twin2', demo_fit: 'high' }),
+    );
+
+    const s1 = similarityScore(ideal, twinHigh);
+    const s2 = similarityScore(ideal, twinLow);
+    expect(s1.overallScore).toBe(s2.overallScore);
+
+    const q1 = qualificationScore(ideal, twinHigh, s1);
+    const q2 = qualificationScore(ideal, twinLow, s2);
+    expect(q1.qualificationScore).toBe(q2.qualificationScore);
+    expect(q1.recommendation).toBe(q2.recommendation);
+
+    // Reconstruct 60/40 blend
+    expect(q1.qualificationScore).toBe(
+      Math.round(q1.businessFit * 0.6 + q1.strategicFit * 0.4),
+    );
+    // Confidence is separate field, not blended into qualificationScore
+    expect(q1.confidence).toBeGreaterThanOrEqual(0);
+    expect(q1.confidence).toBeLessThanOrEqual(100);
+  });
+
+  it('ideal DNA averages references without inventing company facts', () => {
+    const a = buildCompanyDnaFromCsvRow(
+      row({ company_id: 'R1', company_name: 'A', industry: 'B2B SaaS' }),
+    );
+    const b = buildCompanyDnaFromCsvRow(
+      row({ company_id: 'R2', company_name: 'B', industry: 'B2B SaaS' }),
+    );
+    const ideal = buildIdealDna([a, b]);
+    expect(ideal.companyId).toBe('IDEAL');
+    expect(ideal.identity.industry).toBe('B2B SaaS');
+    expect(ideal.facts.some((f) => /2 reference/.test(f))).toBe(true);
+    expect(ideal.identity.website).toBeNull();
+  });
+});
