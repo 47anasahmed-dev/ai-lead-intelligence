@@ -7,6 +7,7 @@ import {
   type QualificationResult,
   type SimilarityResult,
 } from '@ali/shared';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { companyToDna } from './companyMapper.js';
 
@@ -39,7 +40,9 @@ export async function runReferenceAnalysis(searchId: string): Promise<{
   });
 
   try {
-    const refIds = search.references.map((r) => r.companyId);
+    const refIds = search.references.map(
+      (r: import('@prisma/client').ReferenceCompany) => r.companyId,
+    );
     const refCompanies = await prisma.company.findMany({
       where: { id: { in: refIds } },
     });
@@ -54,8 +57,8 @@ export async function runReferenceAnalysis(searchId: string): Promise<{
     for (const dna of refDnas) {
       await prisma.companyProfile.upsert({
         where: { companyId: dna.companyId },
-        create: { companyId: dna.companyId, dna },
-        update: { dna },
+        create: { companyId: dna.companyId, dna: dna as unknown as Prisma.InputJsonValue },
+        update: { dna: dna as unknown as Prisma.InputJsonValue },
       });
       for (const e of dna.evidence) {
         await prisma.evidence.create({
@@ -89,8 +92,8 @@ export async function runReferenceAnalysis(searchId: string): Promise<{
           searchId,
           companyId: candidate.companyId,
           overallScore: similarity.overallScore,
-          dimensions: similarity.dimensions,
-          explanation: similarity.explanation,
+          dimensions: similarity.dimensions as unknown as Prisma.InputJsonValue,
+          explanation: similarity.explanation as unknown as Prisma.InputJsonValue,
         },
       });
 
@@ -110,7 +113,9 @@ export async function runReferenceAnalysis(searchId: string): Promise<{
         },
       });
 
-      const company = allCompanies.find((c) => c.id === candidate.companyId)!;
+      const company = allCompanies.find(
+        (c: import('@prisma/client').Company) => c.id === candidate.companyId,
+      )!;
       ranked.push({
         companyId: candidate.companyId,
         name: company.name,
@@ -131,7 +136,7 @@ export async function runReferenceAnalysis(searchId: string): Promise<{
       where: { id: searchId },
       data: {
         status: 'completed',
-        idealDna,
+        idealDna: idealDna as unknown as Prisma.InputJsonValue,
         completedAt: new Date(),
       },
     });

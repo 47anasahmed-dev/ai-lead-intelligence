@@ -119,7 +119,9 @@ export async function searchRoutes(app: FastifyInstance) {
     const sims = await prisma.similarityResult.findMany({
       where: { searchId: id },
     });
-    const simByCompany = new Map(sims.map((s) => [s.companyId, s]));
+    const simByCompany = new Map<string, import('@prisma/client').SimilarityResult>(
+      sims.map((s) => [s.companyId, s]),
+    );
 
     const data = quals.map((q) => {
       const sim = simByCompany.get(q.companyId);

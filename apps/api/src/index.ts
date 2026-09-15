@@ -15,10 +15,12 @@ async function main() {
 
   app.setErrorHandler((err, _req, reply) => {
     app.log.error(err);
-    const status = (err as { statusCode?: number }).statusCode ?? 500;
-    reply.code(status).send({
-      error: err.message || 'Internal Server Error',
-    });
+    const statusCode =
+      (err && typeof err === 'object' && 'statusCode' in err
+        ? (err as { statusCode: number }).statusCode
+        : 500);
+    const message = err instanceof Error ? err.message : 'Internal Server Error';
+    reply.code(statusCode).send({ error: message });
   });
 
   await app.listen({ port: env.port, host: env.host });

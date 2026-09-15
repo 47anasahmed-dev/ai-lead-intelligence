@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'csv-parse/sync';
 import { PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import {
   buildCompanyDnaFromCsvRow,
   parseRevenue,
@@ -10,10 +11,13 @@ import {
   blankToNull,
   type CsvCompanyRow,
 } from '@ali/shared';
-import 'dotenv/config';
+import { config } from 'dotenv';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+config({ path: path.resolve(__dirname, '../.env') });
 
 const prisma = new PrismaClient();
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function main() {
   const csvPath =
@@ -109,8 +113,8 @@ async function main() {
       const dna = buildCompanyDnaFromCsvRow({ ...row, demo_fit: demoFit ?? '' });
       await prisma.companyProfile.upsert({
         where: { companyId: company.id },
-        create: { companyId: company.id, dna },
-        update: { dna },
+        create: { companyId: company.id, dna: dna as unknown as Prisma.InputJsonValue },
+        update: { dna: dna as unknown as Prisma.InputJsonValue },
       });
 
       upserted += 1;

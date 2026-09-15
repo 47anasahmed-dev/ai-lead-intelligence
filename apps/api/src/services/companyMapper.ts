@@ -5,7 +5,7 @@ import {
   type CsvCompanyRow,
 } from '@ali/shared';
 
-export function companyToCsvRow(c: Company): CsvCompanyRow {
+export function companyToCsvRow(c: import('@prisma/client').Company): CsvCompanyRow {
   return {
     company_id: c.id,
     company_name: c.name,
