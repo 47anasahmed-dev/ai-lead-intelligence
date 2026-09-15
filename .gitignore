@@ -13,3 +13,5 @@ coverage
 apps/api/prisma/*.db
 apps/api/prisma/*.db-journal
 tmp
+tsconfig.tsbuildinfo
+*.tsbuildinfo
