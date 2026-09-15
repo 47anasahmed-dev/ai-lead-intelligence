@@ -1,0 +1,22 @@
+{
+  "name": "ai-lead-intelligence",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter @ali/api --filter @ali/web run dev",
+    "dev:api": "pnpm --filter @ali/api dev",
+    "dev:web": "pnpm --filter @ali/web dev",
+    "build": "pnpm -r run build",
+    "test": "pnpm --filter @ali/shared test",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:migrate": "pnpm --filter @ali/api prisma:migrate",
+    "db:seed": "pnpm --filter @ali/api prisma:seed",
+    "db:import": "pnpm --filter @ali/api import:csv",
+    "typecheck": "pnpm -r run typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

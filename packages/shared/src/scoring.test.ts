@@ -1,0 +1,155 @@
+import { describe, expect, it } from 'vitest';
+import { buildCompanyDnaFromCsvRow, buildIdealDna } from './dna.js';
+import { similarityScore } from './similarity.js';
+import { qualificationScore, recommend } from './qualification.js';
+import { deterministicFilter } from './filter.js';
+import type { CsvCompanyRow } from './types.js';
+
+function row(partial: Partial<CsvCompanyRow> & Pick<CsvCompanyRow, 'company_id' | 'company_name'>): CsvCompanyRow {
+  return {
+    website: 'https://example.com',
+    industry: 'B2B SaaS',
+    primary_service: 'Analytics platform',
+    country: 'United States',
+    city: 'Austin',
+    state: 'TX',
+    employee_range: '51-100',
+    estimated_revenue_usd: '10000000',
+    founded_year: '2015',
+    ownership: 'Private',
+    customer_profile: 'Mid-market businesses; data teams',
+    business_model: 'B2B SaaS',
+    revenue_model: 'Subscription',
+    geography: 'North America',
+    key_services: 'BI; dashboards',
+    growth_signal: 'Hiring data engineers',
+    reputation_signal: 'Strong G2 reviews',
+    technology_stack: 'AWS; Python',
+    linkedin_url: '',
+    company_description: 'A B2B analytics company',
+    demo_fit: 'High',
+    ...partial,
+  };
+}
+
+describe('buildCompanyDnaFromCsvRow', () => {
+  it('captures facts from CSV and keeps demo_fit out of facts', () => {
+    const dna = buildCompanyDnaFromCsvRow(row({ company_id: 'C001', company_name: 'Alpha' }));
+    expect(dna.companyId).toBe('C001');
+    expect(dna.identity.industry).toBe('B2B SaaS');
+    expect(dna.facts.some((f) => /Industry/.test(f))).toBe(true);
+    expect(dna.facts.join(' ')).not.toMatch(/demo_fit|High/i);
+    expect(dna._meta?.demoFit).toBe('High');
+    expect(dna.confidence).toBeGreaterThan(50);
+  });
+
+  it('marks unknowns when fields are blank', () => {
+    const dna = buildCompanyDnaFromCsvRow(
+      row({
+        company_id: 'C002',
+        company_name: 'Beta',
+        industry: '',
+        growth_signal: '',
+        technology_stack: '',
+      }),
+    );
+    expect(dna.unknowns.some((u) => u.includes('industry'))).toBe(true);
+    expect(dna.unknowns.some((u) => u.includes('growth_signal'))).toBe(true);
+  });
+});
+
+describe('similarity + qualification', () => {
+  it('scores similar companies higher than dissimilar ones', () => {
+    const a = buildCompanyDnaFromCsvRow(row({ company_id: 'R1', company_name: 'Ref One' }));
+    const b = buildCompanyDnaFromCsvRow(row({ company_id: 'R2', company_name: 'Ref Two' }));
+    const ideal = buildIdealDna([a, b]);
+
+    const similar = buildCompanyDnaFromCsvRow(
+      row({ company_id: 'C10', company_name: 'Near Twin', primary_service: 'Analytics platform' }),
+    );
+    const dissimilar = buildCompanyDnaFromCsvRow(
+      row({
+        company_id: 'C99',
+        company_name: 'Far Away',
+        industry: 'Food & Beverage',
+        primary_service: 'Snack manufacturing',
+        business_model: 'B2C Manufacturing',
+        customer_profile: 'Grocery retailers',
+        geography: 'Europe',
+        country: 'Germany',
+        ownership: 'Public',
+        employee_range: '5001-10000',
+        growth_signal: 'Plant expansion',
+      }),
+    );
+
+    const simNear = similarityScore(ideal, similar);
+    const simFar = similarityScore(ideal, dissimilar);
+    expect(simNear.overallScore).toBeGreaterThan(simFar.overallScore);
+    expect(simNear.explanation.length).toBeGreaterThan(0);
+
+    const qNear = qualificationScore(ideal, similar, simNear);
+    const qFar = qualificationScore(ideal, dissimilar, simFar);
+    expect(qNear.qualificationScore).toBeGreaterThan(qFar.qualificationScore);
+    expect(qNear.recommendation).not.toBe('REJECT');
+    // Ensure demo_fit never appears in outputs
+    expect(JSON.stringify(qNear)).not.toMatch(/demo_fit/i);
+  });
+
+  it('hard-excludes government/nonprofit ownership', () => {
+    const ideal = buildCompanyDnaFromCsvRow(row({ company_id: 'R1', company_name: 'Ref' }));
+    const gov = buildCompanyDnaFromCsvRow(
+      row({ company_id: 'G1', company_name: 'Agency', ownership: 'Government' }),
+    );
+    const sim = similarityScore(ideal, gov);
+    const q = qualificationScore(ideal, gov, sim);
+    expect(q.hardExclusion).toBe(true);
+    expect(q.recommendation).toBe('REJECT');
+  });
+});
+
+describe('recommend thresholds', () => {
+  it('maps scores to recommendation bands', () => {
+    expect(recommend({ qualificationScore: 80, confidence: 70, hardExclusion: false, riskCount: 1 })).toBe(
+      'CONTACT_NOW',
+    );
+    expect(recommend({ qualificationScore: 60, confidence: 50, hardExclusion: false, riskCount: 3 })).toBe(
+      'RESEARCH_MORE',
+    );
+    expect(recommend({ qualificationScore: 40, confidence: 50, hardExclusion: false, riskCount: 1 })).toBe(
+      'MONITOR',
+    );
+    expect(recommend({ qualificationScore: 20, confidence: 80, hardExclusion: false, riskCount: 0 })).toBe(
+      'REJECT',
+    );
+    expect(recommend({ qualificationScore: 90, confidence: 90, hardExclusion: true, riskCount: 0 })).toBe(
+      'REJECT',
+    );
+  });
+});
+
+describe('deterministicFilter', () => {
+  it('excludes reference ids and keeps industry peers', () => {
+    const refs = [
+      buildCompanyDnaFromCsvRow(row({ company_id: 'R1', company_name: 'Ref' })),
+    ];
+    const ideal = buildIdealDna(refs);
+    const pool = [
+      ...refs,
+      buildCompanyDnaFromCsvRow(row({ company_id: 'C1', company_name: 'Peer' })),
+      buildCompanyDnaFromCsvRow(
+        row({
+          company_id: 'C2',
+          company_name: 'Other',
+          industry: 'Mining',
+          business_model: 'Extraction',
+          geography: 'Africa',
+          country: 'ZA',
+        }),
+      ),
+    ];
+    const filtered = deterministicFilter(ideal, pool, new Set(['R1']));
+    expect(filtered.find((c) => c.companyId === 'R1')).toBeUndefined();
+    expect(filtered.find((c) => c.companyId === 'C1')).toBeTruthy();
+  });
+});
