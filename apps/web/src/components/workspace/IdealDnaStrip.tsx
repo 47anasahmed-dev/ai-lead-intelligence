@@ -7,13 +7,18 @@ import { thresholdChipsLabel, type RankingThresholds } from '@/lib/thresholds';
 
 type Props = {
   idealDna: CompanyDnaPayload | null | undefined;
+  idealDnaSummary?: string | null;
   thresholds: RankingThresholds;
   status?: string;
 };
 
-export function IdealDnaStrip({ idealDna, thresholds, status }: Props) {
+export function IdealDnaStrip({ idealDna, idealDnaSummary, thresholds, status }: Props) {
   const chips = idealDnaChips(idealDna);
   const inferences = (idealDna?.inferences ?? []).filter(Boolean).slice(0, 2);
+  const summary =
+    idealDnaSummary?.trim() ||
+    idealDna?.idealDnaSummary?.trim() ||
+    null;
 
   return (
     <div className="space-y-2 border-b border-slate-700/60 bg-[#161d2e] px-4 py-3">
@@ -50,6 +55,16 @@ export function IdealDnaStrip({ idealDna, thresholds, status }: Props) {
             </span>
           ))}
         </div>
+      )}
+
+      {summary ? (
+        <p className="text-[12px] leading-relaxed text-teal-100/85">{summary}</p>
+      ) : (
+        chips.length > 0 && (
+          <p className="text-[11px] text-slate-500 italic">
+            Awaiting AI Ideal DNA summary… (centroid chips above are deterministic)
+          </p>
+        )
       )}
 
       {inferences.length > 0 && (

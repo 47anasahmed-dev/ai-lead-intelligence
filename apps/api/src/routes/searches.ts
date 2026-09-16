@@ -1,8 +1,13 @@
 import type { FastifyInstance } from 'fastify';
+import type { CompanyDna } from '@ali/shared';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { env } from '../lib/env.js';
 import { resolveEvidence } from '../lib/evidence.js';
+import {
+  buildResultAiFields,
+  extractIdealDnaSummary,
+} from '../lib/resultAiFields.js';
 import { companyToDna } from '../services/companyMapper.js';
 import { runSearchAnalysis } from '../services/analysis.js';
 
@@ -160,7 +165,12 @@ export async function searchRoutes(app: FastifyInstance) {
       },
     });
     if (!search) return reply.code(404).send({ error: 'Search not found' });
-    return { data: search };
+    return {
+      data: {
+        ...search,
+        idealDnaSummary: extractIdealDnaSummary(search.idealDna),
+      },
+    };
   });
 
   app.get('/searches/:id/results', async (req, reply) => {
@@ -232,7 +242,7 @@ export async function searchRoutes(app: FastifyInstance) {
       const full = fullById.get(q.companyId);
       const liveDna = full ? companyToDna(full) : null;
       const profile = profileById.get(q.companyId);
-      const dna = (profile?.dna as { evidence?: unknown } | undefined) ?? liveDna;
+      const dna = (profile?.dna as CompanyDna | undefined) ?? liveDna;
       const evidence = resolveEvidence(
         evidenceById.get(q.companyId) ?? [],
         dna as {
@@ -246,6 +256,8 @@ export async function searchRoutes(app: FastifyInstance) {
         } | null,
         liveDna?.evidence,
       );
+      const explanation = sim?.explanation ?? [];
+      const aiFields = buildResultAiFields(dna ?? null, explanation);
       return {
         companyId: q.companyId,
         company: q.company,
@@ -260,10 +272,20 @@ export async function searchRoutes(app: FastifyInstance) {
         missingInformation: q.missingInformation,
         similarityScore: sim?.overallScore ?? null,
         similarityDimensions: sim?.dimensions ?? null,
-        similarityExplanation: sim?.explanation ?? [],
+        similarityExplanation: explanation,
         evidence,
+        // AI Lead Intelligence (additive — does not replace deterministic scores)
+        aiFitNarrative: aiFields.aiFitNarrative,
+        aiFitNarrativeThin: aiFields.aiFitNarrativeThin,
+        inferences: aiFields.inferences,
+        researchNote: aiFields.researchNote,
+        researchStatus: aiFields.researchStatus,
+        redFlags: aiFields.redFlags,
+        aiResearchConfidence: aiFields.aiResearchConfidence,
       };
     });
+
+    const idealDnaSummary = extractIdealDnaSummary(search.idealDna);
 
     return {
       data,
@@ -274,6 +296,7 @@ export async function searchRoutes(app: FastifyInstance) {
         totalCount,
         limit: query.limit,
         idealDna: search.idealDna,
+        idealDnaSummary,
       },
     };
   });
@@ -327,11 +350,18 @@ export async function searchRoutes(app: FastifyInstance) {
 
     const { demoFit: _demoFit, rawData: _raw, ...publicCompany } = company;
 
+    const explanation = similarity?.explanation ?? [];
+    const aiFields = buildResultAiFields(
+      dna as CompanyDna,
+      explanation,
+    );
+
     return {
       data: {
         searchId: params.id,
         searchStatus: search.status,
         idealDna: search.idealDna,
+        idealDnaSummary: extractIdealDnaSummary(search.idealDna),
         company: publicCompany,
         dna,
         evidence,
@@ -343,6 +373,13 @@ export async function searchRoutes(app: FastifyInstance) {
               explanation: similarity.explanation,
             }
           : null,
+        aiFitNarrative: aiFields.aiFitNarrative,
+        aiFitNarrativeThin: aiFields.aiFitNarrativeThin,
+        inferences: aiFields.inferences,
+        researchNote: aiFields.researchNote,
+        researchStatus: aiFields.researchStatus,
+        redFlags: aiFields.redFlags,
+        aiResearchConfidence: aiFields.aiResearchConfidence,
       },
     };
   });

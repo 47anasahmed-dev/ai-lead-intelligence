@@ -81,9 +81,23 @@ export function leadAiOneLiner(row: {
   risks?: string[];
   similarityExplanation?: string[];
   missingInformation?: string[];
+  aiFitNarrative?: string | null;
+  aiFitNarrativeThin?: boolean;
+  researchStatus?: string | null;
+  researchNote?: string | null;
 }): { text: string; thin: boolean } {
+  if (row.aiFitNarrative?.trim()) {
+    const thin =
+      row.aiFitNarrativeThin === true ||
+      /AI fit narrative thin:/i.test(row.aiFitNarrative);
+    return { text: truncate(row.aiFitNarrative, 110), thin };
+  }
+
   const narratives = extractAiNarratives(row.similarityExplanation);
-  if (narratives[0]) return { text: truncate(narratives[0], 110), thin: false };
+  if (narratives[0]) {
+    const thin = /AI fit narrative thin:/i.test(narratives[0]);
+    return { text: truncate(narratives[0], 110), thin };
+  }
 
   const signal = row.positiveSignals?.find((s) => s.trim().length > 0);
   if (signal) return { text: truncate(signal, 110), thin: false };
@@ -92,10 +106,36 @@ export function leadAiOneLiner(row: {
   if (hint?.kind === 'no_web') return { text: 'AI: no web data', thin: true };
   if (hint?.kind === 'risk') return { text: 'AI: risk flagged', thin: true };
 
+  if (row.researchStatus && row.researchStatus !== 'ok') {
+    return { text: `AI research: ${row.researchStatus}`, thin: true };
+  }
+
   if ((row.missingInformation?.length ?? 0) > 0) {
     return { text: 'Awaiting AI research…', thin: true };
   }
   return { text: 'Awaiting AI research…', thin: true };
+}
+
+/** Prefer typed result fields, fall back to parsing inference stamps. */
+export function resolveAiResearch(row: {
+  inferences?: string[];
+  researchNote?: string | null;
+  researchStatus?: string | null;
+  redFlags?: string[];
+}): {
+  status: string | null;
+  researchNote: string | null;
+  redFlags: string[];
+  otherInferences: string[];
+} {
+  const parsed = extractAiResearchFromInferences(row.inferences);
+  return {
+    status: row.researchStatus ?? parsed.status,
+    researchNote: row.researchNote ?? parsed.researchNote,
+    redFlags:
+      row.redFlags && row.redFlags.length > 0 ? row.redFlags : parsed.redFlags,
+    otherInferences: parsed.otherInferences,
+  };
 }
 
 function truncate(s: string, n: number): string {
@@ -118,6 +158,7 @@ export type IdealDnaLike = {
   inferences?: string[];
   facts?: string[];
   confidence?: number;
+  idealDnaSummary?: string | null;
 };
 
 export type DnaChip = { label: string; value: string };

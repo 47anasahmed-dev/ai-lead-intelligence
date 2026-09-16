@@ -2,6 +2,8 @@ import {
   buildIdealDna,
   buildIdealDnaFromCriteria,
   deterministicFilter,
+  joinAiFitNarrative,
+  extractAiNarratives,
   qualificationScore,
   similarityScore,
   type CompanyDna,
@@ -13,6 +15,11 @@ import { Prisma } from '@prisma/client';
 import { env } from '../lib/env.js';
 import { prisma } from '../lib/prisma.js';
 import { createServerAiProvider, isLiveAiEnabled } from './ai/createProvider.js';
+import {
+  attachFitNarrativeToSimilarity,
+  generateFitNarrative,
+  generateIdealDnaSummary,
+} from './ai/intelligence.js';
 import { companyToDna } from './companyMapper.js';
 import { loadDnasForCompanies } from './research/batchEnrich.js';
 import { enrichCompanies } from './research/enrichCompany.js';
@@ -88,43 +95,95 @@ async function upsertScoreRows(
 }
 
 /**
- * Optional AI narrative: explain already-computed scores without changing them.
- * Narratives are appended to similarity.explanation as labeled strings.
+ * Attach evidence-locked fit narrative (2–4 sentences) without changing scores.
+ * Thin/empty research → honest thin status, never invented prose.
  */
-async function maybeAttachScoreNarrative(
+async function maybeAttachFitNarrative(
   ai: ReturnType<typeof createServerAiProvider>,
+  idealDna: CompanyDna,
+  candidate: CompanyDna,
   similarity: SimilarityResult,
   qualification: QualificationResult,
 ): Promise<SimilarityResult> {
-  if (ai.name === 'noop') return similarity;
+  const fit = await generateFitNarrative(ai, idealDna, candidate, similarity, qualification);
+  return attachFitNarrativeToSimilarity(similarity, fit);
+}
+
+/**
+ * Post-score AI intelligence pass: Ideal DNA summary + fit narratives for top leads.
+ * Runs after status=completed so searches never hang waiting on LLM.
+ */
+async function runAiIntelligenceLayer(
+  searchId: string,
+  idealDna: CompanyDna,
+  ranked: RankedResult[],
+  dnaById: Map<string, CompanyDna>,
+  options?: { referenceDnas?: CompanyDna[] },
+): Promise<CompanyDna> {
+  if (!isLiveAiEnabled()) return idealDna;
+
+  const ai = createServerAiProvider();
+  if (ai.name === 'noop') return idealDna;
+
+  const INTELLIGENCE_TIMEOUT_MS = 75_000;
+  let nextIdeal = idealDna;
+
+  const run = async (): Promise<void> => {
+    // 1) Ideal DNA LLM summary (evidence-locked to refs + centroid)
+    const { summary } = await generateIdealDnaSummary(ai, idealDna, options?.referenceDnas);
+    if (summary) {
+      nextIdeal = { ...idealDna, idealDnaSummary: summary };
+      await prisma.search.update({
+        where: { id: searchId },
+        data: { idealDna: nextIdeal as unknown as Prisma.InputJsonValue },
+      });
+    }
+
+    // 2) Fit narratives for top-N ranked leads (additive; scores unchanged)
+    const maxN = Math.max(0, env.enrichMaxCandidates);
+    const targets = ranked.slice(0, maxN);
+    for (const row of targets) {
+      const candidate = dnaById.get(row.companyId);
+      if (!candidate) continue;
+      // Skip if a non-thin narrative already present
+      const existing = extractAiNarratives(row.similarity.explanation);
+      const joined = joinAiFitNarrative(existing);
+      if (joined && !/AI fit narrative thin:/i.test(joined)) continue;
+
+      let similarity = row.similarity;
+      similarity = await maybeAttachFitNarrative(
+        ai,
+        nextIdeal,
+        candidate,
+        similarity,
+        row.qualification,
+      );
+      await upsertScoreRows(searchId, candidate, similarity, row.qualification);
+      row.similarity = similarity;
+    }
+  };
+
   try {
-    const raw = await ai.generateStructured<{ narrativeBullets?: string[] }>({
-      systemPrompt:
-        'Explain lead scores using ONLY the provided numeric dimensions and signals. Do not invent company facts. Do not change or suggest different scores. Return JSON { "narrativeBullets": string[] }.',
-      userPrompt: `Similarity overall=${similarity.overallScore} dimensions=${JSON.stringify(similarity.dimensions)}
-Qualification businessFit=${qualification.businessFit} strategicFit=${qualification.strategicFit} score=${qualification.qualificationScore} confidence=${qualification.confidence} recommendation=${qualification.recommendation}
-Positive: ${qualification.positiveSignals.join('; ')}
-Risks: ${qualification.risks.join('; ')}
-Missing: ${qualification.missingInformation.join('; ')}`,
-      schema: {
-        type: 'object',
-        properties: { narrativeBullets: { type: 'array', items: { type: 'string' } } },
-      },
-    });
-    const bullets = Array.isArray(raw?.narrativeBullets)
-      ? raw.narrativeBullets
-          .filter((b): b is string => typeof b === 'string' && b.trim().length > 0)
-          .slice(0, 5)
-          .map((b) => `AI narrative: ${b.trim()}`)
-      : [];
-    if (!bullets.length) return similarity;
-    return {
-      ...similarity,
-      explanation: [...similarity.explanation, ...bullets],
-    };
-  } catch {
-    return similarity;
+    await Promise.race([
+      run(),
+      new Promise<never>((_, reject) => {
+        setTimeout(
+          () =>
+            reject(
+              new Error(`AI intelligence layer timeout after ${INTELLIGENCE_TIMEOUT_MS}ms`),
+            ),
+          INTELLIGENCE_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } catch (err) {
+    console.warn(
+      '[ai] intelligence layer failed or timed out; keeping deterministic scores',
+      err instanceof Error ? err.message : err,
+    );
   }
+
+  return nextIdeal;
 }
 
 async function scoreAndPersist(
@@ -222,7 +281,13 @@ async function scoreAndPersist(
 
         let similarity = similarityScore(idealDna, enrichedDna);
         const qualification = qualificationScore(idealDna, enrichedDna, similarity);
-        similarity = await maybeAttachScoreNarrative(ai, similarity, qualification);
+        similarity = await maybeAttachFitNarrative(
+          ai,
+          idealDna,
+          enrichedDna,
+          similarity,
+          qualification,
+        );
         await upsertScoreRows(searchId, enrichedDna, similarity, qualification);
 
         const row = ranked.find((r) => r.companyId === companyId);
@@ -264,8 +329,17 @@ async function scoreAndPersist(
     }
   }
 
-  return {
+  // 3) AI intelligence layer (Ideal DNA summary + fit narratives) — after Completed
+  const idealWithAi = await runAiIntelligenceLayer(
+    searchId,
     idealDna,
+    ranked,
+    dnaById,
+    options,
+  );
+
+  return {
+    idealDna: idealWithAi,
     results: ranked,
     candidateCount: allCompanies.length - excludeIds.size,
     filteredCount: filtered.length,

@@ -62,6 +62,11 @@ export interface CompanyDna {
   unknowns: string[];
   evidence: EvidenceItem[];
   confidence: number;
+  /**
+   * Optional LLM prose summarizing Ideal DNA from reference evidence.
+   * Additive intelligence only — NEVER used in scoring / similarity.
+   */
+  idealDnaSummary?: string;
   /** Stored for audit only — NEVER used in scoring */
   _meta?: {
     demoFit?: string | null;

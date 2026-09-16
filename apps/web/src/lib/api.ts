@@ -89,6 +89,16 @@ export type ResultRow = {
   } | null;
   similarityExplanation: string[];
   evidence?: EvidenceItem[];
+  /** First-class AI fit narrative (2–4 sentences); additive to scores */
+  aiFitNarrative?: string | null;
+  aiFitNarrativeThin?: boolean;
+  /** DNA inference stamps (incl. AI research status / notes / red flags) */
+  inferences?: string[];
+  researchNote?: string | null;
+  researchStatus?: string | null;
+  redFlags?: string[];
+  /** Distinct from scoring confidence (data completeness) */
+  aiResearchConfidence?: number | null;
 };
 
 export type CompanyDnaPayload = {
@@ -118,6 +128,8 @@ export type CompanyDnaPayload = {
   unknowns?: string[];
   evidence?: EvidenceItem[];
   confidence?: number;
+  /** LLM Ideal DNA prose — never used in scoring */
+  idealDnaSummary?: string;
 };
 
 export type CompanyDetail = {
@@ -157,6 +169,7 @@ export const client = {
     api<{
       data: SearchSummary & {
         idealDna?: CompanyDnaPayload | null;
+        idealDnaSummary?: string | null;
         references: Array<{
           company: SearchRefCompany & { industry?: string | null };
         }>;
@@ -171,6 +184,7 @@ export const client = {
         totalCount: number;
         limit: number;
         idealDna?: CompanyDnaPayload | null;
+        idealDnaSummary?: string | null;
       };
     }>(`/searches/${id}/results?limit=${limit}`),
   refreshEvidence: (companyId: string) =>

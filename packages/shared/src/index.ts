@@ -5,3 +5,4 @@ export * from './similarity.js';
 export * from './qualification.js';
 export * from './filter.js';
 export * from './aiProvider.js';
+export * from './aiIntelligence.js';
