@@ -113,7 +113,8 @@ async function maybeAttachFitNarrative(
 }
 
 /**
- * Post-score AI intelligence pass: Ideal DNA summary + fit narratives for top leads.
+ * Post-score AI intelligence pass: Ideal DNA summary (once) + fit narratives for top-K only.
+ * Prefer calling after deep enrich so narratives see richer evidence.
  * Runs after status=completed so searches never hang waiting on LLM.
  */
 async function runAiIntelligenceLayer(
@@ -142,9 +143,8 @@ async function runAiIntelligenceLayer(
       });
     }
 
-    // 2) Fit narratives for top-N ranked leads (additive; scores unchanged)
-    const maxN = Math.max(0, env.enrichMaxCandidates);
-    const targets = ranked.slice(0, maxN);
+    // 2) Fit narratives for hard top-K ranked leads only (additive; scores unchanged)
+    const targets = ranked.slice(0, DEEP_ENRICH_TOP_K);
     for (const row of targets) {
       const candidate = dnaById.get(row.companyId);
       if (!candidate) continue;
@@ -232,15 +232,9 @@ async function runDeepEnrichTopK(
     const enrichedMap = await enrichCompaniesDeep(items, ai, { persist: true });
     for (const [companyId, enrichedDna] of enrichedMap) {
       if (excludeIds.has(companyId)) continue;
-      let similarity = similarityScore(idealDna, enrichedDna);
+      const similarity = similarityScore(idealDna, enrichedDna);
       const qualification = qualificationScore(idealDna, enrichedDna, similarity);
-      similarity = await maybeAttachFitNarrative(
-        ai,
-        idealDna,
-        enrichedDna,
-        similarity,
-        qualification,
-      );
+      // Fit narratives attach later in runAiIntelligenceLayer (top-K only, richer DNA).
       await upsertScoreRows(searchId, enrichedDna, similarity, qualification);
       const row = ranked.find((r) => r.companyId === companyId);
       if (row) {
@@ -371,15 +365,10 @@ async function scoreAndPersist(
       for (const [companyId, enrichedDna] of enrichedMap) {
         if (excludeIds.has(companyId)) continue;
 
-        let similarity = similarityScore(idealDna, enrichedDna);
+        // Rescore only — no fit narratives here (ranks 6+ must never get them;
+        // top-K narratives attach in runAiIntelligenceLayer after deep enrich).
+        const similarity = similarityScore(idealDna, enrichedDna);
         const qualification = qualificationScore(idealDna, enrichedDna, similarity);
-        similarity = await maybeAttachFitNarrative(
-          ai,
-          idealDna,
-          enrichedDna,
-          similarity,
-          qualification,
-        );
         await upsertScoreRows(searchId, enrichedDna, similarity, qualification);
 
         const row = ranked.find((r) => r.companyId === companyId);
@@ -421,23 +410,24 @@ async function scoreAndPersist(
     }
   }
 
-  // 3) AI intelligence layer (Ideal DNA summary + fit narratives) — after Completed
+  // 3) Deep multi-source enrich for top-K (qualification rank) — after Completed,
+  //    before Ideal DNA summary + fit narratives so narratives see richer evidence.
+  await runDeepEnrichTopK(
+    searchId,
+    idealDna,
+    ranked,
+    dnaById,
+    allCompanies,
+    excludeIds,
+  );
+
+  // 4) AI intelligence layer: Ideal DNA summary (once) + fit narratives for top-K only
   const idealWithAi = await runAiIntelligenceLayer(
     searchId,
     idealDna,
     ranked,
     dnaById,
     options,
-  );
-
-  // 4) Deep multi-source enrich for top-5 (qualification rank) — after Completed
-  await runDeepEnrichTopK(
-    searchId,
-    idealWithAi,
-    ranked,
-    dnaById,
-    allCompanies,
-    excludeIds,
   );
 
   return {
