@@ -118,7 +118,7 @@ export function QualifyScore({
         render={
           <div
             className={cn(
-              'flex flex-col items-center gap-0 cursor-default outline-none leading-none',
+              'flex flex-col items-center gap-1.5 cursor-default outline-none leading-none',
               className,
             )}
           />

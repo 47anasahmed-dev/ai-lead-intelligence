@@ -137,7 +137,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
       )}
       {/* Left: name + rings; right: Qualify then rec — never share one cell */}
       <div className="flex items-start gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-3.5">
           <div className="flex items-center gap-2 min-w-0">
             <span
               className={cn(
