@@ -135,7 +135,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
           className="pointer-events-none absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-teal-400 animate-live-pulse"
         />
       )}
-      {/* Left stack (name → metrics) so Qualify height does not open a gap under the name */}
+      {/* Left: name + rings; right: Qualify then rec — never share one cell */}
       <div className="flex items-start gap-3">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex items-center gap-2 min-w-0">
@@ -158,40 +158,40 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
             </div>
           </div>
 
-          <div className="flex items-end justify-between gap-2">
-            <div className="flex gap-3">
-              <MetricRing
-                label="Similarity"
-                value={row.similarityScore}
-                accent="teal"
-                tooltip="How closely this lead matches Ideal DNA across weighted dimensions."
-              />
-              <MetricRing
-                label="Confidence"
-                value={row.confidence}
-                accent="blue"
-                tooltip="Scoring confidence = field completeness of company DNA. Not AI research confidence."
-              />
-              <MetricRing
-                label="Evidence"
-                value={Math.min(100, evidenceCount * 12)}
-                accent="amber"
-                tooltip={`${evidenceCount} evidence row${evidenceCount === 1 ? '' : 's'} from CSV / website research.`}
-              />
-            </div>
-            <span
-              className="rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.04em] shrink-0"
-              style={rec.style}
-            >
-              {rec.label}
-            </span>
+          <div className="flex gap-3">
+            <MetricRing
+              label="Similarity"
+              value={row.similarityScore}
+              accent="teal"
+              tooltip="How closely this lead matches Ideal DNA across weighted dimensions."
+            />
+            <MetricRing
+              label="Confidence"
+              value={row.confidence}
+              accent="blue"
+              tooltip="Scoring confidence = field completeness of company DNA. Not AI research confidence."
+            />
+            <MetricRing
+              label="Evidence"
+              value={Math.min(100, evidenceCount * 12)}
+              accent="amber"
+              tooltip={`${evidenceCount} evidence row${evidenceCount === 1 ? '' : 's'} from CSV / website research.`}
+            />
           </div>
         </div>
-        <QualifyScore
-          score={row.qualificationScore}
-          businessFit={row.businessFit}
-          strategicFit={row.strategicFit}
-        />
+        <div className="flex shrink-0 flex-col items-center gap-1.5">
+          <QualifyScore
+            score={row.qualificationScore}
+            businessFit={row.businessFit}
+            strategicFit={row.strategicFit}
+          />
+          <span
+            className="rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.04em] shrink-0"
+            style={rec.style}
+          >
+            {rec.label}
+          </span>
+        </div>
       </div>
 
       {chips.length > 0 && (
