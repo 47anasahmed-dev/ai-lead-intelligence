@@ -8,6 +8,8 @@ import {
   buildResultAiFields,
   extractIdealDnaSummary,
 } from '../lib/resultAiFields.js';
+import { createServerAiProvider } from '../services/ai/createProvider.js';
+import { suggestRankingThresholds } from '../services/ai/intelligence.js';
 import { companyToDna } from '../services/companyMapper.js';
 import { runSearchAnalysis } from '../services/analysis.js';
 
@@ -380,6 +382,90 @@ export async function searchRoutes(app: FastifyInstance) {
         researchStatus: aiFields.researchStatus,
         redFlags: aiFields.redFlags,
         aiResearchConfidence: aiFields.aiResearchConfidence,
+      },
+    };
+  });
+
+
+  /**
+   * AI (or heuristic) ranking-threshold suggest for a search.
+   * Uses score/evidence stats + Ideal DNA summary only — never invents company facts.
+   */
+  app.post('/searches/:id/suggest-thresholds', async (req, reply) => {
+    const { id } = z.object({ id: z.string() }).parse(req.params);
+    const search = await prisma.search.findUnique({ where: { id } });
+    if (!search) return reply.code(404).send({ error: 'Search not found' });
+
+    const quals = await prisma.qualification.findMany({
+      where: { searchId: id },
+      select: {
+        companyId: true,
+        qualificationScore: true,
+      },
+      orderBy: [{ qualificationScore: 'desc' }, { confidence: 'desc' }],
+      take: 500,
+    });
+
+    const companyIds = quals.map((q) => q.companyId);
+    const [sims, evidenceRows, profiles] = await Promise.all([
+      companyIds.length
+        ? prisma.similarityResult.findMany({
+            where: { searchId: id, companyId: { in: companyIds } },
+            select: { companyId: true, overallScore: true },
+          })
+        : Promise.resolve([]),
+      companyIds.length
+        ? prisma.evidence.findMany({
+            where: { companyId: { in: companyIds } },
+            select: { companyId: true },
+          })
+        : Promise.resolve([]),
+      companyIds.length
+        ? prisma.companyProfile.findMany({
+            where: { companyId: { in: companyIds } },
+            select: { companyId: true, dna: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const simByCompany = new Map(sims.map((s) => [s.companyId, s.overallScore]));
+    const evidenceCountById = new Map<string, number>();
+    for (const row of evidenceRows) {
+      evidenceCountById.set(
+        row.companyId,
+        (evidenceCountById.get(row.companyId) ?? 0) + 1,
+      );
+    }
+    const dnaEvidenceById = new Map<string, number>();
+    for (const p of profiles) {
+      const dna = p.dna as { evidence?: unknown[] } | null;
+      const n = Array.isArray(dna?.evidence) ? dna.evidence.length : 0;
+      dnaEvidenceById.set(p.companyId, n);
+    }
+
+    const rows = quals.map((q) => {
+      const tableCount = evidenceCountById.get(q.companyId) ?? 0;
+      const dnaCount = dnaEvidenceById.get(q.companyId) ?? 0;
+      return {
+        qualificationScore: q.qualificationScore,
+        similarityScore: simByCompany.get(q.companyId) ?? null,
+        evidenceCount: Math.max(tableCount, dnaCount),
+      };
+    });
+
+    const idealDnaSummary = extractIdealDnaSummary(search.idealDna);
+    const ai = createServerAiProvider();
+    const suggestion = await suggestRankingThresholds(ai, {
+      rows,
+      idealDnaSummary,
+      searchStatus: search.status,
+    });
+
+    return {
+      data: {
+        ...suggestion,
+        searchId: id,
+        resultCount: rows.length,
       },
     };
   });

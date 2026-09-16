@@ -147,6 +147,18 @@ export type CompanyDetail = {
   evidence?: EvidenceItem[];
 };
 
+
+export type ThresholdSuggestResponse = {
+  minQualification: number;
+  minSimilarity: number;
+  minEvidenceCount: number;
+  rationale: string;
+  source: 'ai' | 'heuristic';
+  message?: string;
+  searchId?: string;
+  resultCount?: number;
+};
+
 export const client = {
   health: () => api<{ status: string; db: string }>('/health'),
   listCompanies: (q?: string, limit = 40) =>
@@ -198,4 +210,9 @@ export const client = {
       method: 'POST',
       body: '{}',
     }),
+  suggestThresholds: (searchId: string) =>
+    api<{ data: ThresholdSuggestResponse }>(
+      `/searches/${searchId}/suggest-thresholds`,
+      { method: 'POST', body: '{}' },
+    ),
 };

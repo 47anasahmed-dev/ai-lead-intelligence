@@ -17,6 +17,7 @@ Base: `http://localhost:3001`
 | GET | `/searches/:id` | Search + references/criteria + idealDna when completed |
 | GET | `/searches/:id/results?limit=5&recommendation=` | Ranked rows + `evidence`; `meta.totalCount` |
 | GET | `/searches/:id/companies/:companyId` | Search-scoped detail for progressive UI |
+| POST | `/searches/:id/suggest-thresholds` | AI/heuristic ranking floors from score+evidence stats + Ideal DNA summary |
 
 ## POST `/searches` bodies
 
@@ -81,6 +82,49 @@ ENRICH_BATCH_TIMEOUT_MS=600000
 When `ENRICH_ON_SEARCH=true`, search may website-enrich a small set of **unstamped** candidates (not “top 5 only”). Prefer leaving it false and running `enrich:all` weekly.
 
 Default `AI_PROVIDER=noop` — no network/LLM calls; batch still persists CSV DNA/evidence so the Evidence UI is never empty. Missing API key for `openai` / `openrouter` falls back to noop (warns once).
+
+
+## POST `/searches/:id/suggest-thresholds`
+
+Suggests AND ranking floors (`minQualification`, `minSimilarity`, `minEvidenceCount`) for the Settings panel.
+
+- Loads up to 500 scored results (qualification + similarity + evidence counts) and Ideal DNA summary when present.
+- Calls OpenRouter/OpenAI `generateStructured` when `AI_PROVIDER` is live; otherwise returns the 25th-percentile **heuristic**.
+- Never invents company facts — only score/evidence distribution stats + Ideal DNA prose.
+- Clamps: scores 0–100, evidence 0–50.
+
+**Example success (AI):**
+
+```json
+{
+  "data": {
+    "minQualification": 62,
+    "minSimilarity": 58,
+    "minEvidenceCount": 2,
+    "rationale": "Floors near the lower quartile keep a focused shortlist without emptying the ranked view.",
+    "source": "ai",
+    "searchId": "clx…",
+    "resultCount": 120
+  }
+}
+```
+
+**Example fallback (noop / timeout / invalid JSON):**
+
+```json
+{
+  "data": {
+    "minQualification": 55,
+    "minSimilarity": 51,
+    "minEvidenceCount": 1,
+    "rationale": "Local 25th-percentile floors from the current score/evidence distribution so roughly the stronger three-quarters of leads remain visible.",
+    "source": "heuristic",
+    "message": "AI provider is noop or missing a key — using local heuristic.",
+    "searchId": "clx…",
+    "resultCount": 120
+  }
+}
+```
 
 ## Evidence in responses
 

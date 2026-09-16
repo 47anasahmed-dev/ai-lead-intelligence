@@ -7,13 +7,18 @@ import {
   AI_NARRATIVE_PREFIX,
   FIT_NARRATIVE_JSON_SCHEMA,
   IDEAL_DNA_SUMMARY_JSON_SCHEMA,
+  THRESHOLD_SUGGEST_JSON_SCHEMA,
+  clampThresholdSuggest,
   extractAiResearchFromInferences,
+  heuristicSuggestThresholds,
   isThinResearchStatus,
   thinFitNarrativeMessage,
   type AiProvider,
   type CompanyDna,
   type QualificationResult,
+  type ScoreEvidenceRow,
   type SimilarityResult,
+  type ThresholdSuggestResult,
 } from '@ali/shared';
 
 export interface FitNarrativeResult {
@@ -233,5 +238,105 @@ ${refBlock}`,
     return { summary, thin };
   } catch {
     return { summary: null, thin: true };
+  }
+}
+
+export type ThresholdSuggestInput = {
+  rows: ScoreEvidenceRow[];
+  idealDnaSummary?: string | null;
+  searchStatus?: string | null;
+};
+
+/**
+ * Suggest ranking floors (AND) so the ranked list stays useful — not empty, not everything.
+ * Evidence-locked: only uses provided score/evidence stats + Ideal DNA prose.
+ * Falls back to 25th-percentile heuristic when AI is noop / missing / invalid / times out.
+ */
+export async function suggestRankingThresholds(
+  ai: AiProvider,
+  input: ThresholdSuggestInput,
+): Promise<ThresholdSuggestResult> {
+  const heuristic = heuristicSuggestThresholds(input.rows);
+  const fallback = (
+    message: string,
+  ): ThresholdSuggestResult => ({
+    ...heuristic,
+    source: 'heuristic',
+    message,
+  });
+
+  if (input.rows.length === 0) {
+    return fallback('No scored results for this search — using defaults/heuristic.');
+  }
+
+  if (ai.name === 'noop') {
+    return fallback('AI provider is noop or missing a key — using local heuristic.');
+  }
+
+  const quals = input.rows.map((r) => r.qualificationScore).sort((a, b) => a - b);
+  const sims = input.rows
+    .map((r) => r.similarityScore)
+    .filter((v): v is number => v != null)
+    .sort((a, b) => a - b);
+  const evCounts = input.rows.map((r) => r.evidenceCount).sort((a, b) => a - b);
+
+  const stats = (arr: number[]) => {
+    if (!arr.length) return { min: null, p25: null, median: null, p75: null, max: null };
+    const at = (p: number) => arr[Math.floor((arr.length - 1) * p)]!;
+    return {
+      min: arr[0]!,
+      p25: at(0.25),
+      median: at(0.5),
+      p75: at(0.75),
+      max: arr[arr.length - 1]!,
+    };
+  };
+
+  const summary =
+    typeof input.idealDnaSummary === 'string' && input.idealDnaSummary.trim()
+      ? input.idealDnaSummary.trim().slice(0, 800)
+      : '(none provided)';
+
+  try {
+    const raw = await ai.generateStructured<{
+      minQualification?: number;
+      minSimilarity?: number;
+      minEvidenceCount?: number;
+      rationale?: string;
+    }>({
+      systemPrompt: `You suggest ranking threshold floors for an AI Lead Intelligence workspace.
+Rules:
+- Leads must pass ALL floors (AND): minQualification, minSimilarity, minEvidenceCount.
+- Suggest floors so the ranked list stays useful: not empty, not everything — typically surface a focused shortlist for B2B outreach.
+- Use ONLY the provided score/evidence distribution stats and Ideal DNA prose. Never invent company facts, customers, funding, or products.
+- Clamp: qualification and similarity 0–100; evidence count 0–50 (integers).
+- Prefer floors near the lower quartile / mid band unless the distribution is very tight or sparse.
+- Return JSON matching the schema with a short rationale (1–3 sentences) explaining the floors from the stats.`,
+      userPrompt: `SEARCH STATUS: ${input.searchStatus ?? 'unknown'}
+RESULT COUNT: ${input.rows.length}
+
+QUALIFICATION SCORE STATS: ${JSON.stringify(stats(quals))}
+SIMILARITY SCORE STATS: ${JSON.stringify(stats(sims))}
+EVIDENCE COUNT STATS: ${JSON.stringify(stats(evCounts))}
+
+IDEAL DNA SUMMARY (prose only — do not invent beyond this):
+${summary}
+
+HEURISTIC BASELINE (25th percentile — you may adjust thoughtfully):
+${JSON.stringify(heuristic)}`,
+      schema: THRESHOLD_SUGGEST_JSON_SCHEMA,
+    });
+
+    const clamped = clampThresholdSuggest(raw ?? {});
+    if (!clamped) {
+      return fallback('AI returned invalid threshold JSON — using local heuristic.');
+    }
+    return { ...clamped, source: 'ai' };
+  } catch (err) {
+    const msg =
+      err instanceof Error && /timed out/i.test(err.message)
+        ? 'AI request timed out — using local heuristic.'
+        : 'AI suggest failed — using local heuristic.';
+    return fallback(msg);
   }
 }
