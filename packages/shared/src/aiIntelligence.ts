@@ -230,9 +230,87 @@ function clampInt(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
+/** Default K for outreach shortlist floors (top-N leads after AND filters). */
+export const DEFAULT_THRESHOLD_TOP_K = 5;
+
+const DEFAULT_THRESHOLD_FLOOR = {
+  minQualification: 55,
+  minSimilarity: 60,
+  minEvidenceCount: 2,
+} as const;
+
 /**
- * Local 25th-percentile heuristic for ranking floors.
- * Shared by API (AI fallback) and web (offline / no-search fallback).
+ * K-th best value in a descending sort (index min(K-1, n-1)).
+ * Empty array → null.
+ */
+export function kthBestDescending(values: number[], k: number): number | null {
+  if (!values.length || k < 1) return null;
+  const sorted = [...values].sort((a, b) => b - a);
+  return sorted[Math.min(k - 1, sorted.length - 1)]!;
+}
+
+/**
+ * Top-K floors so roughly the top K leads pass all AND filters
+ * (minQualification AND minSimilarity AND minEvidenceCount).
+ * Tiny epsilon (−1 on scores / evidence) so ≥K usually still pass.
+ * Shared by API (AI fallback) and mirrored on web when @ali/shared is unavailable.
+ */
+export function suggestTopKThresholds(
+  rows: ScoreEvidenceRow[],
+  k: number = DEFAULT_THRESHOLD_TOP_K,
+  defaults: {
+    minQualification: number;
+    minSimilarity: number;
+    minEvidenceCount: number;
+  } = { ...DEFAULT_THRESHOLD_FLOOR },
+): Omit<ThresholdSuggestResult, 'source' | 'message'> {
+  const topK = Math.max(1, Math.round(k) || DEFAULT_THRESHOLD_TOP_K);
+  if (rows.length === 0) {
+    return {
+      ...defaults,
+      rationale:
+        `No scored results yet — using system defaults aimed at a focused top-${topK} outreach shortlist once results arrive.`,
+    };
+  }
+
+  const quals = rows.map((r) => r.qualificationScore);
+  const sims = rows
+    .map((r) => r.similarityScore)
+    .filter((v): v is number => v != null);
+  const evCounts = rows.map((r) => r.evidenceCount);
+
+  const qK = kthBestDescending(quals, topK);
+  const sK = kthBestDescending(sims, topK);
+  const eK = kthBestDescending(evCounts, topK);
+
+  // Epsilon so the K-th lead (and usually a few peers) still clears ≥ floors.
+  const minQualification = clampInt(
+    qK == null ? defaults.minQualification : Math.max(0, qK - 1),
+    0,
+    100,
+  );
+  const minSimilarity = clampInt(
+    sK == null ? defaults.minSimilarity : Math.max(0, sK - 1),
+    0,
+    100,
+  );
+  const minEvidenceCount = clampInt(
+    eK == null ? defaults.minEvidenceCount : Math.max(0, eK - 1),
+    0,
+    50,
+  );
+
+  return {
+    minQualification,
+    minSimilarity,
+    minEvidenceCount,
+    rationale: `Top-${topK} floors from the current distribution so roughly the top ${topK} leads pass all AND filters (qualification, similarity, and evidence) for a focused outreach shortlist.`,
+  };
+}
+
+/**
+ * @deprecated Prefer suggestTopKThresholds — kept as alias for API callers.
+ * Local top-K heuristic for ranking floors (default K=5).
  */
 export function heuristicSuggestThresholds(
   rows: ScoreEvidenceRow[],
@@ -240,41 +318,9 @@ export function heuristicSuggestThresholds(
     minQualification: number;
     minSimilarity: number;
     minEvidenceCount: number;
-  } = { minQualification: 55, minSimilarity: 60, minEvidenceCount: 2 },
+  } = { ...DEFAULT_THRESHOLD_FLOOR },
 ): Omit<ThresholdSuggestResult, 'source' | 'message'> {
-  if (rows.length === 0) {
-    return {
-      ...defaults,
-      rationale:
-        'No scored results yet — using system defaults so the ranked list stays usable once results arrive.',
-    };
-  }
-  const quals = rows.map((r) => r.qualificationScore).sort((a, b) => a - b);
-  const sims = rows
-    .map((r) => r.similarityScore)
-    .filter((v): v is number => v != null)
-    .sort((a, b) => a - b);
-  const evCounts = rows.map((r) => r.evidenceCount).sort((a, b) => a - b);
-  const p25 = (arr: number[]) =>
-    arr.length ? arr[Math.floor((arr.length - 1) * 0.25)]! : 0;
-
-  return {
-    minQualification: clampInt(p25(quals), 0, 100),
-    minSimilarity: clampInt(
-      sims.length ? p25(sims) : defaults.minSimilarity,
-      0,
-      100,
-    ),
-    minEvidenceCount: clampInt(
-      evCounts.length
-        ? Math.max(1, p25(evCounts))
-        : defaults.minEvidenceCount,
-      0,
-      50,
-    ),
-    rationale:
-      'Local 25th-percentile floors from the current score/evidence distribution so roughly the stronger three-quarters of leads remain visible.',
-  };
+  return suggestTopKThresholds(rows, DEFAULT_THRESHOLD_TOP_K, defaults);
 }
 
 export function clampThresholdSuggest(raw: {

@@ -10,8 +10,9 @@ import {
   THRESHOLD_SUGGEST_JSON_SCHEMA,
   clampThresholdSuggest,
   extractAiResearchFromInferences,
-  heuristicSuggestThresholds,
+  DEFAULT_THRESHOLD_TOP_K,
   isThinResearchStatus,
+  suggestTopKThresholds,
   thinFitNarrativeMessage,
   type AiProvider,
   type CompanyDna,
@@ -248,15 +249,16 @@ export type ThresholdSuggestInput = {
 };
 
 /**
- * Suggest ranking floors (AND) so the ranked list stays useful — not empty, not everything.
+ * Suggest ranking floors (AND) so roughly the top 5 leads remain for outreach.
  * Evidence-locked: only uses provided score/evidence stats + Ideal DNA prose.
- * Falls back to 25th-percentile heuristic when AI is noop / missing / invalid / times out.
+ * Falls back to top-K heuristic when AI is noop / missing / invalid / times out.
  */
 export async function suggestRankingThresholds(
   ai: AiProvider,
   input: ThresholdSuggestInput,
 ): Promise<ThresholdSuggestResult> {
-  const heuristic = heuristicSuggestThresholds(input.rows);
+  const topK = DEFAULT_THRESHOLD_TOP_K;
+  const heuristic = suggestTopKThresholds(input.rows, topK);
   const fallback = (
     message: string,
   ): ThresholdSuggestResult => ({
@@ -266,11 +268,13 @@ export async function suggestRankingThresholds(
   });
 
   if (input.rows.length === 0) {
-    return fallback('No scored results for this search — using defaults/heuristic.');
+    return fallback(
+      `No scored results for this search — using defaults aimed at a focused top-${topK} shortlist.`,
+    );
   }
 
   if (ai.name === 'noop') {
-    return fallback('AI provider is noop or missing a key — using local heuristic.');
+    return fallback('AI provider is noop or missing a key — using local top-K heuristic.');
   }
 
   const quals = input.rows.map((r) => r.qualificationScore).sort((a, b) => a - b);
@@ -281,14 +285,19 @@ export async function suggestRankingThresholds(
   const evCounts = input.rows.map((r) => r.evidenceCount).sort((a, b) => a - b);
 
   const stats = (arr: number[]) => {
-    if (!arr.length) return { min: null, p25: null, median: null, p75: null, max: null };
+    if (!arr.length) {
+      return { min: null, p25: null, median: null, p75: null, max: null, topK: null };
+    }
     const at = (p: number) => arr[Math.floor((arr.length - 1) * p)]!;
+    const desc = [...arr].sort((a, b) => b - a);
     return {
       min: arr[0]!,
       p25: at(0.25),
       median: at(0.5),
       p75: at(0.75),
       max: arr[arr.length - 1]!,
+      /** K-th best (descending) — reference for top-K floors */
+      topK: desc[Math.min(topK - 1, desc.length - 1)]!,
     };
   };
 
@@ -307,13 +316,14 @@ export async function suggestRankingThresholds(
       systemPrompt: `You suggest ranking threshold floors for an AI Lead Intelligence workspace.
 Rules:
 - Leads must pass ALL floors (AND): minQualification, minSimilarity, minEvidenceCount.
-- Suggest floors so the ranked list stays useful: not empty, not everything — typically surface a focused shortlist for B2B outreach.
+- Goal: choose floors such that approximately the top ${topK} leads remain after the AND filter — a short focused shortlist for B2B outreach, not a broad funnel that keeps most of the list.
 - Use ONLY the provided score/evidence distribution stats and Ideal DNA prose. Never invent company facts, customers, funding, or products.
 - Clamp: qualification and similarity 0–100; evidence count 0–50 (integers).
-- Prefer floors near the lower quartile / mid band unless the distribution is very tight or sparse.
-- Return JSON matching the schema with a short rationale (1–3 sentences) explaining the floors from the stats.`,
+- Prefer floors near the top-${topK} baseline when the distribution supports a tight shortlist; loosen slightly if too few would pass, tighten if too many would pass.
+- Return JSON matching the schema with a short rationale (1–3 sentences) explaining how the floors target roughly the top ${topK} leads.`,
       userPrompt: `SEARCH STATUS: ${input.searchStatus ?? 'unknown'}
 RESULT COUNT: ${input.rows.length}
+TARGET SHORTLIST SIZE: ~${topK} leads after AND filter
 
 QUALIFICATION SCORE STATS: ${JSON.stringify(stats(quals))}
 SIMILARITY SCORE STATS: ${JSON.stringify(stats(sims))}
@@ -322,21 +332,21 @@ EVIDENCE COUNT STATS: ${JSON.stringify(stats(evCounts))}
 IDEAL DNA SUMMARY (prose only — do not invent beyond this):
 ${summary}
 
-HEURISTIC BASELINE (25th percentile — you may adjust thoughtfully):
+HEURISTIC BASELINE (top-${topK} floors — reference; you may adjust thoughtfully toward ~${topK} passing AND):
 ${JSON.stringify(heuristic)}`,
       schema: THRESHOLD_SUGGEST_JSON_SCHEMA,
     });
 
     const clamped = clampThresholdSuggest(raw ?? {});
     if (!clamped) {
-      return fallback('AI returned invalid threshold JSON — using local heuristic.');
+      return fallback('AI returned invalid threshold JSON — using local top-K heuristic.');
     }
     return { ...clamped, source: 'ai' };
   } catch (err) {
     const msg =
       err instanceof Error && /timed out/i.test(err.message)
-        ? 'AI request timed out — using local heuristic.'
-        : 'AI suggest failed — using local heuristic.';
+        ? 'AI request timed out — using local top-K heuristic.'
+        : 'AI suggest failed — using local top-K heuristic.';
     return fallback(msg);
   }
 }
