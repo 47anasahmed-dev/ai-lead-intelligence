@@ -21,6 +21,7 @@ import {
 import { linkForCompany, normalizeUrl } from '@/lib/links';
 import {
   companyDnaChips,
+  compactDnaChips,
   extractAiNarratives,
   extractAiResearchFromInferences,
   extractWhyRanked,
@@ -172,14 +173,17 @@ function LeadPanel({
 }) {
   const href = linkForCompany(row.company.website, row.company.linkedinUrl);
   const dna = detail?.dna ?? null;
-  const chips = companyDnaChips({
-    industry: row.company.industry ?? dna?.identity?.industry ?? null,
-    primaryService: row.company.primaryService ?? dna?.identity?.primaryService ?? null,
-    ownership: row.company.ownership ?? dna?.ownership?.type ?? null,
-    geography: row.company.geography ?? dna?.geography?.region ?? null,
-    employeeRange: row.company.employeeRange ?? dna?.size?.employeeRange ?? null,
-    businessModel: row.company.businessModel ?? dna?.businessModel?.model ?? null,
-  });
+  const chips = compactDnaChips(
+    companyDnaChips({
+      industry: row.company.industry ?? dna?.identity?.industry ?? null,
+      primaryService: row.company.primaryService ?? dna?.identity?.primaryService ?? null,
+      ownership: row.company.ownership ?? dna?.ownership?.type ?? null,
+      geography: row.company.geography ?? dna?.geography?.region ?? null,
+      employeeRange: row.company.employeeRange ?? dna?.size?.employeeRange ?? null,
+      businessModel: row.company.businessModel ?? dna?.businessModel?.model ?? null,
+    }),
+    { maxLen: 36, maxSegments: 1 },
+  );
   const evidence = detail?.evidence ?? row.evidence ?? [];
   const ai = buildLeadAiBundle(row, dna);
 
@@ -228,7 +232,7 @@ function LeadPanel({
         {refreshMsg && <p className="mt-1 text-[10px] text-slate-500">{refreshMsg}</p>}
       </header>
 
-      <div className="space-y-4 p-4">
+      <div className="space-y-5 p-5">
         <div className="grid grid-cols-2 gap-2">
           <MetricBox label="Qualify" value={row.qualificationScore} sub={`B${row.businessFit} / S${row.strategicFit}`} />
           <MetricBox label="Confidence" value={row.confidence} sub="field completeness" />
@@ -245,12 +249,12 @@ function LeadPanel({
         </div>
 
         <Section title="Company DNA">
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-2">
             {chips.length === 0 ? (
               <span className="text-xs text-slate-500 italic">No DNA chips yet</span>
             ) : (
               chips.map((c) => (
-                <Chip key={`${c.label}-${c.value}`} label={c.label} value={c.value} />
+                <Chip key={`${c.label}-${c.full}`} label={c.label} value={c.value} full={c.full} />
               ))
             )}
           </div>
@@ -303,16 +307,19 @@ function ReferencePanel({
 }) {
   const href = linkForCompany(company.website, company.linkedinUrl);
   const dna = detail?.dna ?? null;
-  const chips = dna
-    ? idealDnaChips(dna)
-    : companyDnaChips({
-        industry: company.industry ?? detail?.industry ?? null,
-        primaryService: detail?.primaryService ?? null,
-        ownership: detail?.ownership ?? null,
-        geography: detail?.geography ?? null,
-        employeeRange: detail?.employeeRange ?? null,
-        businessModel: detail?.businessModel ?? null,
-      });
+  const chips = compactDnaChips(
+    dna
+      ? idealDnaChips(dna)
+      : companyDnaChips({
+          industry: company.industry ?? detail?.industry ?? null,
+          primaryService: detail?.primaryService ?? null,
+          ownership: detail?.ownership ?? null,
+          geography: detail?.geography ?? null,
+          employeeRange: detail?.employeeRange ?? null,
+          businessModel: detail?.businessModel ?? null,
+        }),
+    { maxLen: 36, maxSegments: 1 },
+  );
   const research = extractAiResearchFromInferences(dna?.inferences);
   const evidence = detail?.evidence ?? dna?.evidence ?? [];
 
@@ -358,16 +365,16 @@ function ReferencePanel({
         {refreshMsg && <p className="mt-1 text-[10px] text-slate-500">{refreshMsg}</p>}
       </header>
 
-      <div className="space-y-4 p-4">
+      <div className="space-y-5 p-5">
         <Section title="Reference DNA">
           {loading && chips.length === 0 ? (
             <p className="text-xs text-slate-500 flex items-center gap-2">
               <Loader2 className="h-3 w-3 animate-spin" /> Loading DNA…
             </p>
           ) : (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {chips.map((c) => (
-                <Chip key={`${c.label}-${c.value}`} label={c.label} value={c.value} />
+                <Chip key={`${c.label}-${c.full}`} label={c.label} value={c.value} full={c.full} />
               ))}
               {chips.length === 0 && (
                 <span className="text-xs text-slate-500 italic">No DNA yet</span>
@@ -386,7 +393,7 @@ function ReferencePanel({
           icon={<Sparkles className="h-3.5 w-3.5 text-teal-400" />}
         >
           {research.researchNote ? (
-            <p className="text-xs text-slate-300">{research.researchNote}</p>
+            <ClampText text={research.researchNote} lines={3} />
           ) : research.status === 'ok' ? (
             <p className="text-xs text-slate-400 italic">
               AI research completed — no separate research note on this profile.
@@ -532,7 +539,9 @@ function AiIntelligenceSection({
             Fit narrative
           </h4>
           {ai.fitNarrative && !ai.fitThin ? (
-            <p className="mt-1 text-xs text-slate-200 leading-relaxed">{ai.fitNarrative}</p>
+            <div className="mt-1">
+              <ClampText text={ai.fitNarrative} lines={3} className="text-xs text-slate-200 leading-relaxed" />
+            </div>
           ) : ai.narratives.length > 0 ? (
             <ul className="mt-1 space-y-1">
               {ai.narratives.map((n) => (
@@ -602,7 +611,9 @@ function AiIntelligenceSection({
             Research notes
           </h4>
           {ai.researchNote ? (
-            <p className="mt-1 text-xs text-slate-300">{ai.researchNote}</p>
+            <div className="mt-1">
+              <ClampText text={ai.researchNote} lines={3} className="text-xs text-slate-300" />
+            </div>
           ) : ai.researchStatus ? (
             <p className="mt-1 text-xs text-slate-400">AI research status: {ai.researchStatus}</p>
           ) : (
@@ -647,8 +658,8 @@ function Section({
   icon?: ReactNode;
 }) {
   return (
-    <section>
-      <h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+    <section className="space-y-2">
+      <h3 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
         {icon}
         {title}
       </h3>
@@ -657,9 +668,53 @@ function Section({
   );
 }
 
-function Chip({ label, value }: { label: string; value: string }) {
+function ClampText({
+  text,
+  lines = 3,
+  className = 'text-xs text-slate-300',
+}: {
+  text: string;
+  lines?: number;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > 180 || text.includes('\n');
   return (
-    <span className="rounded-full border border-slate-600 bg-[#1A2236] px-2 py-0.5 text-[11px] text-slate-200">
+    <div>
+      <p
+        title={!open ? text : undefined}
+        className={cn(className, !open && lines === 3 && 'line-clamp-3', !open && lines === 2 && 'line-clamp-2')}
+      >
+        {text}
+      </p>
+      {long && (
+        <button
+          type="button"
+          className="mt-1 text-[10px] font-medium text-teal-400 hover:underline"
+          onClick={() => setOpen((v) => !v)}
+        >
+          {open ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Chip({
+  label,
+  value,
+  full,
+}: {
+  label: string;
+  value: string;
+  full?: string;
+}) {
+  const tip = full && full !== value ? full : undefined;
+  return (
+    <span
+      title={tip}
+      className="max-w-full truncate rounded-lg border border-slate-600 bg-[#1A2236] px-2.5 py-1 text-[11px] text-slate-200"
+    >
       <span className="text-slate-500">{label}</span> {value}
     </span>
   );
