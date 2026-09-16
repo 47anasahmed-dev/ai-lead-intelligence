@@ -78,7 +78,7 @@ export function MetricRing({
             {v == null ? '—' : Math.round(v)}
           </text>
         </svg>
-        <span className="text-[10px] uppercase tracking-wide text-slate-400">{label}</span>
+        <span className="text-[11px] uppercase tracking-wide text-[#9CA3AF]">{label}</span>
       </TooltipTrigger>
       <TooltipContent className="max-w-xs bg-slate-900 text-slate-100">
         {tooltip}
@@ -158,10 +158,10 @@ export function QualifyScore({
             {Math.round(v)}
           </span>
         </div>
-        <span className="text-[9px] font-bold uppercase tracking-[0.06em] text-slate-500">
+        <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-[#9CA3AF]">
           Qualify
         </span>
-        <span className="text-[10px] tabular-nums text-slate-400">
+        <span className="text-[11px] tabular-nums text-[#D1D5DB]">
           B{businessFit} · S{strategicFit}
         </span>
       </TooltipTrigger>

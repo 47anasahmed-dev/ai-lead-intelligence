@@ -1,5 +1,6 @@
 'use client';
 
+import type { CSSProperties } from 'react';
 import { AlertTriangle, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ResultRow } from '@/lib/api';
@@ -28,34 +29,53 @@ function hash(name: string): number {
   return h;
 }
 
-function recStyle(rec: string): { label: string; className: string } {
+function recStyle(rec: string): { label: string; style: CSSProperties } {
   switch (rec) {
     case 'CONTACT_NOW':
       return {
         label: 'CONTACT NOW',
-        className:
-          'bg-emerald-400/15 text-emerald-300 border border-emerald-400/40 font-bold',
+        style: {
+          background: 'rgba(52,211,153,0.15)',
+          color: '#34d399',
+          border: '1px solid rgba(52,211,153,0.35)',
+        },
       };
     case 'RESEARCH_MORE':
       return {
         label: 'RESEARCH MORE',
-        className:
-          'bg-amber-400/15 text-amber-300 border border-amber-400/40 font-bold',
+        style: {
+          background: 'rgba(251,191,36,0.12)',
+          color: '#fbbf24',
+          border: '1px solid rgba(251,191,36,0.35)',
+        },
       };
     case 'MONITOR':
       return {
         label: 'MONITOR',
-        className:
-          'bg-blue-500/15 text-sky-300 border border-blue-400/35 font-semibold',
+        style: {
+          background: 'rgba(59,130,246,0.15)',
+          color: '#93c5fd',
+          border: '1px solid rgba(59,130,246,0.35)',
+        },
       };
     case 'REJECT':
       return {
         label: 'REJECT',
-        className:
-          'bg-rose-400/12 text-rose-300 border border-rose-400/30 font-semibold',
+        style: {
+          background: 'rgba(248,113,113,0.12)',
+          color: '#f87171',
+          border: '1px solid rgba(248,113,113,0.3)',
+        },
       };
     default:
-      return { label: rec, className: 'bg-slate-700/60 text-slate-300 border border-slate-600 font-semibold' };
+      return {
+        label: rec,
+        style: {
+          background: 'rgba(45,55,72,0.6)',
+          color: '#D1D5DB',
+          border: '1px solid #2d3748',
+        },
+      };
   }
 }
 
@@ -106,7 +126,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
         'bg-[#1A2236] hover:bg-[#1f2940]',
         selected
           ? 'border-teal-400/70 bg-gradient-to-br from-teal-500/14 to-[#1A2236] shadow-[inset_3px_0_0_#2DD4BF,0_0_0_1px_rgba(45,212,191,0.35),0_0_28px_rgba(20,184,166,0.18)]'
-          : 'border-slate-700/80 hover:border-teal-500/45 hover:shadow-[0_0_0_1px_rgba(20,184,166,0.2),0_12px_28px_rgba(0,0,0,0.35)]',
+          : 'border-[#2d3748] hover:border-teal-500/45 hover:shadow-[0_0_0_1px_rgba(20,184,166,0.2),0_12px_28px_rgba(0,0,0,0.35)]',
       )}
     >
       {selected && (
@@ -164,10 +184,8 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
           />
         </div>
         <span
-          className={cn(
-            'rounded-md px-2.5 py-1 text-[10px] uppercase tracking-[0.04em] shrink-0',
-            rec.className,
-          )}
+          className="rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.04em] shrink-0"
+          style={rec.style}
         >
           {rec.label}
         </span>
@@ -205,7 +223,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
               'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium',
               hint.kind === 'no_web'
                 ? 'bg-slate-700/80 text-slate-300'
-                : 'bg-rose-500/15 text-rose-300',
+                : 'bg-[rgba(248,113,113,0.18)] text-[#f87171]',
             )}
           >
             <AlertTriangle className="h-3 w-3" />

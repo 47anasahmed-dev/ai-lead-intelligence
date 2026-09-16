@@ -2,6 +2,22 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Exact hybrid mockup tokens (04-hybrid-a-cards.html) */
+:root {
+  --bg: #121826;
+  --bg-elev: #1A2236;
+  --bg-panel: #232B3E;
+  --border: #2d3748;
+  --border-soft: #252d3d;
+  --muted: #D1D5DB;
+  --faint: #9CA3AF;
+  --teal: #2DD4BF;
+  --accent: #3B82F6;
+  --warn: #fbbf24;
+  --danger: #f87171;
+  --ok: #34d399;
+}
+
 @theme {
   --color-background: #121826;
   --color-foreground: #f8fafc;
