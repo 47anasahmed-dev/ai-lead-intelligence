@@ -9,6 +9,7 @@ import {
   parseRevenue,
   parseYear,
   blankToNull,
+  repairCsvLinkedInFields,
   type CsvCompanyRow,
 } from '@ali/shared';
 import { config } from 'dotenv';
@@ -40,7 +41,8 @@ async function main() {
   let skipped = 0;
   const errors: string[] = [];
 
-  for (const row of records) {
+  for (const raw of records) {
+    const row = repairCsvLinkedInFields(raw);
     const id = blankToNull(row.company_id);
     const name = blankToNull(row.company_name);
     if (!id || !name) {
