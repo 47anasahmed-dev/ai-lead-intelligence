@@ -14,6 +14,7 @@ import { env } from '../lib/env.js';
 import { prisma } from '../lib/prisma.js';
 import { createServerAiProvider, isLiveAiEnabled } from './ai/createProvider.js';
 import { companyToDna } from './companyMapper.js';
+import { loadDnasForCompanies } from './research/batchEnrich.js';
 import { enrichCompanies } from './research/enrichCompany.js';
 
 export interface RankedResult {
@@ -133,7 +134,11 @@ async function scoreAndPersist(
   excludeIds: Set<string>,
   options?: { referenceDnas?: CompanyDna[] },
 ): Promise<AnalysisOutcome> {
-  const allDnas = allCompanies.map(companyToDna);
+  // Prefer persisted (batch-enriched) DNA so AI status/red flags/evidence apply to ALL candidates
+  const dnaMap = await loadDnasForCompanies(allCompanies);
+  const allDnas = allCompanies.map(
+    (c: import('@prisma/client').Company) => dnaMap.get(c.id) ?? companyToDna(c),
+  );
   const filtered = deterministicFilter(idealDna, allDnas, excludeIds);
 
   await prisma.similarityResult.deleteMany({ where: { searchId } });
@@ -167,24 +172,40 @@ async function scoreAndPersist(
     return b.similarity.overallScore - a.similarity.overallScore;
   });
 
-  // 2) Controlled AI enrichment: all refs + top ENRICH_MAX_CANDIDATES
-  if (isLiveAiEnabled()) {
+  // Mark completed immediately after deterministic pass so UI never stays on Running
+  // if enrichment hangs or the process restarts mid-enrichment.
+  await prisma.search.update({
+    where: { id: searchId },
+    data: {
+      status: 'completed',
+      idealDna: idealDna as unknown as Prisma.InputJsonValue,
+      completedAt: new Date(),
+    },
+  });
+
+  // 2) Optional search-time enrichment (OFF by default).
+  // Catalog batch (POST /enrichment/batch) + manual refresh are the source of truth
+  // for AI website evidence / empty / redFlags across the full company list.
+  // When ENRICH_ON_SEARCH=true, only fill a few *unstamped* candidates (not top-N only).
+  const ENRICHMENT_OVERALL_TIMEOUT_MS = 90_000;
+  if (isLiveAiEnabled() && env.enrichOnSearch) {
     const ai = createServerAiProvider();
     const maxN = Math.max(0, env.enrichMaxCandidates);
-    const topIds = new Set(ranked.slice(0, maxN).map((r) => r.companyId));
-    const toEnrich: CompanyDna[] = [];
+    const needsStamp = (d: CompanyDna) =>
+      !(d.inferences ?? []).some((i) => i.startsWith('AI research status:'));
 
+    const toEnrich: CompanyDna[] = [];
     if (options?.referenceDnas?.length) {
       for (const ref of options.referenceDnas) {
-        toEnrich.push(ref);
+        if (needsStamp(ref)) toEnrich.push(ref);
       }
     }
-    for (const id of topIds) {
-      const d = dnaById.get(id);
-      if (d) toEnrich.push(d);
+    for (const r of ranked) {
+      if (toEnrich.length >= maxN) break;
+      const d = dnaById.get(r.companyId);
+      if (d && needsStamp(d)) toEnrich.push(d);
     }
 
-    // Dedupe by companyId
     const seen = new Set<string>();
     const unique = toEnrich.filter((d) => {
       if (seen.has(d.companyId)) return false;
@@ -192,13 +213,12 @@ async function scoreAndPersist(
       return true;
     });
 
-    try {
+    const runEnrichment = async (): Promise<void> => {
+      if (!unique.length) return;
       const enrichedMap = await enrichCompanies(unique, ai, { persist: true });
 
-      // 3) Re-score enriched candidates only (deterministic scores from updated DNA)
       for (const [companyId, enrichedDna] of enrichedMap) {
-        if (excludeIds.has(companyId)) continue; // refs excluded from ranking
-        if (!topIds.has(companyId)) continue;
+        if (excludeIds.has(companyId)) continue;
 
         let similarity = similarityScore(idealDna, enrichedDna);
         const qualification = qualificationScore(idealDna, enrichedDna, similarity);
@@ -219,23 +239,30 @@ async function scoreAndPersist(
         if (q !== 0) return q;
         return b.similarity.overallScore - a.similarity.overallScore;
       });
+    };
+
+    try {
+      await Promise.race([
+        runEnrichment(),
+        new Promise<never>((_, reject) => {
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  `Enrichment overall timeout after ${ENRICHMENT_OVERALL_TIMEOUT_MS}ms`,
+                ),
+              ),
+            ENRICHMENT_OVERALL_TIMEOUT_MS,
+          );
+        }),
+      ]);
     } catch (err) {
-      // Enrichment failures must not fail the whole search
       console.warn(
-        '[ai] enrichment pass failed; keeping deterministic scores',
+        '[ai] optional search enrichment failed; keeping persisted-DNA scores',
         err instanceof Error ? err.message : err,
       );
     }
   }
-
-  await prisma.search.update({
-    where: { id: searchId },
-    data: {
-      status: 'completed',
-      idealDna: idealDna as unknown as Prisma.InputJsonValue,
-      completedAt: new Date(),
-    },
-  });
 
   return {
     idealDna,
@@ -271,7 +298,10 @@ export async function runReferenceAnalysis(searchId: string): Promise<AnalysisOu
       throw new Error('One or more reference companies not found');
     }
 
-    const refDnas = refCompanies.map(companyToDna);
+    const refDnaMap = await loadDnasForCompanies(refCompanies);
+    const refDnas = refCompanies.map(
+      (c: import('@prisma/client').Company) => refDnaMap.get(c.id) ?? companyToDna(c),
+    );
     const idealDna = buildIdealDna(refDnas);
 
     // Persist / upsert DNA profiles for references (replace evidence — no dupes on re-run)

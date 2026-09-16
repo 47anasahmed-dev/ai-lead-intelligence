@@ -11,12 +11,15 @@ import {
   type AiProvider,
   type GenerateStructuredParams,
 } from '@ali/shared';
+import { env } from '../../lib/env.js';
 
 export interface OpenRouterConfig {
   apiKey: string;
   model: string;
   siteUrl?: string;
   appName?: string;
+  /** Per-request AbortSignal timeout in ms (default from env / 25000) */
+  timeoutMs?: number;
 }
 
 export class OpenRouterProvider implements AiProvider {
@@ -25,12 +28,14 @@ export class OpenRouterProvider implements AiProvider {
   private readonly model: string;
   private readonly siteUrl: string;
   private readonly appName: string;
+  private readonly timeoutMs: number;
 
   constructor(cfg: OpenRouterConfig) {
     this.apiKey = cfg.apiKey;
     this.model = cfg.model;
     this.siteUrl = cfg.siteUrl ?? 'http://localhost';
     this.appName = cfg.appName ?? 'ai-lead-intelligence';
+    this.timeoutMs = cfg.timeoutMs ?? env.openRouterTimeoutMs;
   }
 
   async generateStructured<T>(params: GenerateStructuredParams): Promise<T> {
@@ -42,26 +47,42 @@ export class OpenRouterProvider implements AiProvider {
 
       const user = `${params.userPrompt}\n\nJSON schema (follow exactly):\n${JSON.stringify(params.schema, null, 2)}`;
 
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': this.siteUrl,
-          'X-Title': this.appName,
-        },
-        body: JSON.stringify({
-          model,
-          temperature: 0,
-          ...(process.env.OPENROUTER_JSON_OBJECT === '1'
-            ? { response_format: { type: 'json_object' as const } }
-            : {}),
-          messages: [
-            { role: 'system', content: system },
-            { role: 'user', content: user },
-          ],
-        }),
-      });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+      let res: Response;
+      try {
+        res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': this.siteUrl,
+            'X-Title': this.appName,
+          },
+          body: JSON.stringify({
+            model,
+            temperature: 0,
+            ...(process.env.OPENROUTER_JSON_OBJECT === '1'
+              ? { response_format: { type: 'json_object' as const } }
+              : {}),
+            messages: [
+              { role: 'system', content: system },
+              { role: 'user', content: user },
+            ],
+          }),
+          signal: controller.signal,
+        });
+      } catch (err) {
+        if (
+          (err instanceof Error && err.name === 'AbortError') ||
+          (typeof DOMException !== 'undefined' && err instanceof DOMException && err.name === 'AbortError')
+        ) {
+          throw new Error(`OpenRouter request timed out after ${this.timeoutMs}ms`);
+        }
+        throw err;
+      } finally {
+        clearTimeout(timer);
+      }
 
       if (!res.ok) {
         const body = await res.text().catch(() => '');

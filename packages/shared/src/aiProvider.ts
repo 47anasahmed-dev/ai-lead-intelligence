@@ -26,6 +26,10 @@ export const EnrichmentResultSchema = z.object({
   filledUnknowns: z.array(EnrichmentFilledUnknownSchema).default([]),
   narrativeBullets: z.array(z.string()).default([]),
   unknownsRemaining: z.array(z.string()).default([]),
+  /** Negative findings grounded in source (shutdown, lawsuit, nonprofit-only, etc.) */
+  redFlags: z.array(z.string()).default([]),
+  /** Short note when little/no useful company info was found */
+  researchNote: z.string().optional(),
 });
 
 export type EnrichmentInference = z.infer<typeof EnrichmentInferenceSchema>;
@@ -63,6 +67,8 @@ export const ENRICHMENT_JSON_SCHEMA = {
     },
     narrativeBullets: { type: 'array', items: { type: 'string' } },
     unknownsRemaining: { type: 'array', items: { type: 'string' } },
+    redFlags: { type: 'array', items: { type: 'string' } },
+    researchNote: { type: 'string' },
   },
   required: ['inferences', 'filledUnknowns', 'narrativeBullets', 'unknownsRemaining'],
 } as const;
@@ -72,6 +78,7 @@ export const EMPTY_ENRICHMENT: EnrichmentResult = {
   filledUnknowns: [],
   narrativeBullets: [],
   unknownsRemaining: [],
+  redFlags: [],
 };
 
 // ── Quote filter (anti-hallucination) ───────────────────────────────────────
@@ -102,6 +109,12 @@ export function sanitizeEnrichment(
   if (!parsed.success) return { ...EMPTY_ENRICHMENT };
 
   const data = parsed.data;
+  const redFlags = data.redFlags
+    .map((f) => f.trim())
+    .filter((f) => f.length > 0)
+    .slice(0, 12);
+  const researchNote = data.researchNote?.trim() || undefined;
+
   return {
     inferences: filterByEvidenceQuote(data.inferences, sourceText),
     filledUnknowns: filterByEvidenceQuote(data.filledUnknowns, sourceText),
@@ -114,6 +127,8 @@ export function sanitizeEnrichment(
     unknownsRemaining: data.unknownsRemaining
       .map((u) => u.trim())
       .filter((u) => u.length > 0),
+    redFlags,
+    ...(researchNote ? { researchNote } : {}),
   };
 }
 

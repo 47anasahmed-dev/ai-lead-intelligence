@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup B — Command Center · AI Lead Intelligence</title>
+<!--
+  IA TRADEOFF (B): Maximum density, Bloomberg-ish. No permanent left rail —
+  refs collapse to top pills and recent searches to a thin strip. Table + stacked
+  DNA/evidence share one viewport. Highest data-per-pixel; weakest for users who
+  need a calm onboarding path or large touch targets.
+-->
+<style>
+  :root {
+    --bg: #121826;
+    --panel: #1A2236;
+    --panel2: #232B3E;
+    --line: #2d3748;
+    --text: #FFFFFF;
+    --muted: #D1D5DB;
+    --faint: #9CA3AF;
+    --teal: #2DD4BF;
+    --teal-dim: rgba(20,184,166,0.15);
+    --sky: #3B82F6;
+    --ok: #34d399;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --purple: #c4b5fd;
+    --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: linear-gradient(180deg, #1A1F2E 0%, #0A0F1C 100%); color: var(--text); font-size: 12.5px; min-height: 100vh; }
+  button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  a { color: var(--teal); }
+
+  .shell { max-width: 1320px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+
+  .top {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 8px 12px; border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #1A1F2E, #0A0F1C);
+  }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 750; font-size: 13px; }
+  .logo {
+    width: 22px; height: 22px; border-radius: 5px; font-size: 9px; font-weight: 800;
+    background: linear-gradient(135deg, #14b8a6, #0284c7); color: #042f2e;
+    display: grid; place-items: center;
+  }
+  .mockup-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--teal); background: var(--teal-dim); border: 1px solid rgba(45,212,191,0.35);
+    padding: 3px 8px; border-radius: 999px;
+  }
+  .spacer { flex: 1; }
+  .btn-run {
+    background: linear-gradient(135deg, #14B8A6, #0f766e); color: #ecfdf5;
+    font-weight: 700; padding: 6px 14px; border-radius: 6px; font-size: 12px;
+  }
+  .btn-run:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+
+  .recent-strip {
+    display: flex; align-items: center; gap: 8px; padding: 5px 12px;
+    border-bottom: 1px solid var(--line); background: #0A0F1C; overflow-x: auto;
+  }
+  .recent-strip .lbl { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); white-space: nowrap; }
+  .chip {
+    font-size: 11px; padding: 2px 8px; border-radius: 4px; white-space: nowrap;
+    border: 1px solid var(--line); color: var(--muted); background: var(--panel);
+  }
+  .chip.active, .chip:hover { color: var(--text); border-color: rgba(45,212,191,0.4); }
+  .chip:focus-visible { outline: 2px solid var(--sky); }
+
+  .ref-row {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  .ref-row .lbl { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px 4px 4px; border-radius: 999px;
+    background: var(--panel2); border: 1px solid rgba(45,212,191,0.35);
+  }
+  .pill .av {
+    width: 22px; height: 22px; border-radius: 999px; font-size: 8px; font-weight: 800;
+    display: grid; place-items: center; color: #fff;
+  }
+  .av-adept { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+  .av-bd { background: linear-gradient(135deg, #ef4444, #f97316); }
+  .av-fig { background: linear-gradient(135deg, #0ea5e9, #06b6d4); }
+  .av-cov { background: linear-gradient(135deg, #10b981, #14b8a6); }
+  .av-vic { background: linear-gradient(135deg, #a855f7, #ec4899); }
+  .av-soft { background: linear-gradient(135deg, #64748b, #94a3b8); }
+  .av-path { background: linear-gradient(135deg, #f59e0b, #eab308); }
+  .av-agi { background: linear-gradient(135deg, #3b82f6, #6366f1); }
+  .dna-inline {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-left: 8px; padding-left: 10px;
+    border-left: 1px solid var(--line);
+  }
+  .dna-bit {
+    font-size: 11px; padding: 3px 8px; border-radius: 4px;
+    background: rgba(45,212,191,0.08); border: 1px solid rgba(45,212,191,0.2); color: #99f6e4;
+  }
+  .dna-bit b { color: var(--faint); font-weight: 600; margin-right: 4px; font-size: 9px; text-transform: uppercase; }
+
+  .grid {
+    flex: 1; display: grid; grid-template-columns: 1.35fr 1fr; min-height: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .col { overflow: auto; min-height: 420px; }
+  .col-left { border-right: 1px solid var(--line); }
+  .col-right { display: flex; flex-direction: column; background: var(--panel); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    position: sticky; top: 0; background: #181E2A; z-index: 1;
+    text-align: left; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--faint); padding: 7px 8px; border-bottom: 1px solid var(--line); font-weight: 700;
+  }
+  td { padding: 7px 8px; border-bottom: 1px solid #252d3d; vertical-align: middle; }
+  tr.lead { cursor: pointer; }
+  tr.lead:hover td { background: #232B3E; }
+  tr.lead.selected td { background: rgba(45,212,191,0.07); box-shadow: inset 2px 0 0 var(--teal); }
+  tr.lead:focus-visible { outline: 2px solid var(--sky); outline-offset: -2px; }
+  .co { display: flex; align-items: center; gap: 7px; }
+  .co .av { width: 24px; height: 24px; border-radius: 5px; font-size: 8px; font-weight: 800; display: grid; place-items: center; color: #fff; flex-shrink: 0; }
+  .co-name { font-weight: 650; font-size: 12.5px; }
+  .co-sub { color: var(--muted); font-size: 10.5px; }
+  .mono { font-family: var(--mono); font-weight: 700; }
+  .hi { color: var(--ok); } .mid { color: var(--warn); } .lo { color: var(--muted); }
+  .bar { width: 40px; height: 4px; background: #1a2a45; border-radius: 99px; display: inline-block; vertical-align: middle; margin-right: 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--sky); }
+  .rec { font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 5px; border-radius: 3px; }
+  .rec-contact { background: rgba(52,211,153,0.15); color: var(--ok); }
+  .rec-research { background: rgba(251,191,36,0.12); color: var(--warn); }
+  .rec-monitor { background: rgba(56,189,248,0.12); color: var(--sky); }
+  .badge { font-size: 9px; font-weight: 650; padding: 1px 5px; border-radius: 3px; margin-right: 3px; }
+  .badge-risk { background: rgba(248,113,113,0.18); color: var(--danger); }
+  .badge-noweb { background: rgba(196,181,253,0.15); color: var(--purple); }
+
+  .panel-block { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .panel-block:last-child { border-bottom: none; flex: 1; }
+  .ph {
+    font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--faint); margin-bottom: 8px; display: flex; justify-content: space-between;
+  }
+  .sel-head { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+  .sel-head .av { width: 36px; height: 36px; border-radius: 8px; font-size: 12px; font-weight: 800; display: grid; place-items: center; color: #fff; }
+  .sel-title { font-size: 15px; font-weight: 750; letter-spacing: -0.02em; }
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; }
+  .metric {
+    background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px; text-align: center;
+  }
+  .metric .v { font-family: var(--mono); font-size: 15px; font-weight: 700; }
+  .metric .l { font-size: 9px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.05em; }
+  .dna-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; }
+  .df { background: var(--bg); border: 1px solid #15233d; border-radius: 5px; padding: 6px 7px; }
+  .df .k { font-size: 9px; color: var(--faint); text-transform: uppercase; }
+  .df .v { font-weight: 600; margin-top: 1px; }
+  .risk { padding: 6px 8px; margin-bottom: 4px; border-radius: 5px; background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.25); color: #fecaca; font-size: 11.5px; }
+  .ev { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin-bottom: 6px; }
+  .ev q { display: block; font-style: italic; color: #c9d4ea; margin-bottom: 4px; }
+  .ev .m { display: flex; justify-content: space-between; color: var(--muted); font-size: 10.5px; }
+
+  .footer {
+    display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
+    padding: 6px 12px; background: #0A0F1C; border-top: 1px solid var(--line);
+    color: var(--faint); font-size: 11px; font-family: var(--mono);
+  }
+  .footer kbd {
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 3px;
+    padding: 1px 5px; color: var(--muted); font-size: 10px;
+  }
+
+  .toast {
+    position: fixed; bottom: 40px; right: 20px; transform: translateY(20px);
+    background: #115e59; color: #ecfdf5; font-weight: 650; padding: 10px 16px; border-radius: 8px;
+    opacity: 0; transition: all 0.2s; z-index: 40; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  @media (max-width: 960px) {
+    .grid { grid-template-columns: 1fr; }
+    .col-left { border-right: none; border-bottom: 1px solid var(--line); max-height: 50vh; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <div class="brand"><span class="logo">AI</span> Lead Intelligence</div>
+    <span class="mockup-label">Mockup B — pick one</span>
+    <div class="spacer"></div>
+    <span style="color:var(--muted);font-size:11px;">6 leads · 2 refs · live session</span>
+    <button type="button" class="btn-run" id="btnRun">▶ Run</button>
+  </header>
+
+  <div class="recent-strip" aria-label="Recent searches">
+    <span class="lbl">Recent</span>
+    <button type="button" class="chip active">Robotics PE targets</button>
+    <button type="button" class="chip">Adept + BD similar</button>
+    <button type="button" class="chip">Industrial automation US</button>
+    <button type="button" class="chip">Private robotics Series B+</button>
+  </div>
+
+  <div class="ref-row" aria-label="References and Ideal DNA">
+    <span class="lbl">Refs</span>
+    <span class="pill"><span class="av av-adept">AD</span> Adept AI</span>
+    <span class="pill"><span class="av av-bd">BD</span> Boston Dynamics</span>
+    <div class="dna-inline" role="group" aria-label="Ideal DNA">
+      <span class="dna-bit"><b>Ind</b> Robotics/Automation</span>
+      <span class="dna-bit"><b>Own</b> Private</span>
+      <span class="dna-bit"><b>Geo</b> Global+US</span>
+      <span class="dna-bit"><b>Grw</b> Growing</span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="col col-left">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>Company</th><th>Score</th><th>Conf</th><th>Rec</th><th>AI</th><th>Ev</th>
+          </tr>
+        </thead>
+        <tbody id="leadTable"></tbody>
+      </table>
+    </div>
+    <div class="col col-right" id="detail" aria-live="polite"></div>
+  </div>
+
+  <footer class="footer" aria-label="Keyboard hints">
+    <span><kbd>↑</kbd><kbd>↓</kbd> select lead</span>
+    <span><kbd>Enter</kbd> focus evidence</span>
+    <span><kbd>R</kbd> run search</span>
+    <span><kbd>/</kbd> filter table</span>
+    <span style="margin-left:auto;color:var(--muted)">Command center · denser than marketing SaaS</span>
+  </footer>
+</div>
+<div class="toast" id="toast" role="status">Would start search</div>
+
+<script>
+const LEADS = [
+  { id:"fig", name:"Figure AI", sub:"Humanoid · Sunnyvale", av:"av-fig", initials:"FI", score:92, conf:88, rec:"CONTACT_NOW", badges:[], evid:7,
+    dna:{ industry:"Humanoid robotics", ownership:"Private", geo:"US", growth:"Hypergrowth", size:"200–500", customers:"Auto / logistics OEMs" },
+    risks:[],
+    evidence:[
+      { q:"Building general-purpose humanoids for manufacturing and logistics.", field:"identity", url:"https://example.com/figure/about", src:"website" },
+      { q:"Series B closed; expanding Bay Area engineering headcount.", field:"growth", url:"https://example.com/figure/news", src:"news" },
+      { q:"Partnership discussions with automotive OEMs reported.", field:"customers", url:"https://example.com/figure/press", src:"press" }
+    ]},
+  { id:"cov", name:"Covariant", sub:"Warehouse AI · Emeryville", av:"av-cov", initials:"CO", score:87, conf:82, rec:"CONTACT_NOW", badges:[], evid:6,
+    dna:{ industry:"Warehouse automation", ownership:"Private", geo:"US + EU", growth:"Growing", size:"100–250", customers:"3PLs / e-commerce" },
+    risks:[],
+    evidence:[
+      { q:"RFM foundation model powers robotic picking across SKUs.", field:"technology", url:"https://example.com/covariant/rfm", src:"website" },
+      { q:"Deployed with major logistics operators in NA and Europe.", field:"geography", url:"https://example.com/covariant/customers", src:"case study" }
+    ]},
+  { id:"vic", name:"Vicarious Systems", sub:"Industrial AI · Union City", av:"av-vic", initials:"VI", score:78, conf:65, rec:"RESEARCH_MORE", badges:["risk"], evid:4,
+    dna:{ industry:"Industrial robotics AI", ownership:"Private (acq. signals)", geo:"US", growth:"Unclear", size:"50–150", customers:"Manufacturing" },
+    risks:["Acquisition rumors may change ownership DNA mid-funnel","Sparse recent public hiring signals"],
+    evidence:[
+      { q:"Vision-based robot brains for flexible manufacturing cells.", field:"identity", url:"https://example.com/vicarious/product", src:"website" },
+      { q:"Limited post-2023 product roadmap visibility.", field:"growth", url:"https://example.com/vicarious/blog", src:"blog" }
+    ]},
+  { id:"soft", name:"Soft Robotics", sub:"Grippers · Bedford", av:"av-soft", initials:"SR", score:74, conf:71, rec:"RESEARCH_MORE", badges:[], evid:5,
+    dna:{ industry:"End-of-arm tooling", ownership:"Private", geo:"US", growth:"Stable", size:"50–100", customers:"Food / CPG packagers" },
+    risks:[],
+    evidence:[{ q:"mGrip soft grippers for irregular food and CPG SKUs.", field:"services", url:"https://example.com/soft/mgrip", src:"website" }]},
+  { id:"path", name:"Path Robotics", sub:"Welding · Columbus", av:"av-path", initials:"PR", score:71, conf:58, rec:"MONITOR", badges:["noweb"], evid:2,
+    dna:{ industry:"Welding automation", ownership:"Private", geo:"US Midwest", growth:"Growing", size:"100–200", customers:"Metal fab shops" },
+    risks:["Low web evidence density — catalog-only enrichment"],
+    evidence:[{ q:"Autonomous welding cells for structural metal fabrication.", field:"identity", url:"https://example.com/path/overview", src:"directory" }]},
+  { id:"agi", name:"Agility Robotics", sub:"Digit · Corvallis", av:"av-agi", initials:"AG", score:68, conf:75, rec:"RESEARCH_MORE", badges:[], evid:5,
+    dna:{ industry:"Bipedal logistics robots", ownership:"Private", geo:"US", growth:"Growing", size:"150–300", customers:"Warehouses / Amazon pilots" },
+    risks:[],
+    evidence:[
+      { q:"Digit designed for tote moving in human-centric warehouses.", field:"customers", url:"https://example.com/agility/digit", src:"website" },
+      { q:"Multi-year logistics pilot programs expanding.", field:"growth", url:"https://example.com/agility/news", src:"news" }
+    ]}
+];
+const REC_C = { CONTACT_NOW:"rec-contact", RESEARCH_MORE:"rec-research", MONITOR:"rec-monitor", REJECT:"rec-reject" };
+const REC_L = { CONTACT_NOW:"Contact", RESEARCH_MORE:"Research", MONITOR:"Monitor", REJECT:"Reject" };
+const sc = s => s>=80?"hi":s>=65?"mid":"lo";
+const badges = b => b.map(x => x==="risk"?'<span class="badge badge-risk">⚠ Risk</span>':'<span class="badge badge-noweb">◌ No web</span>').join("");
+
+let idx = 0;
+function renderTable() {
+  document.getElementById("leadTable").innerHTML = LEADS.map((L,i) => `
+    <tr class="lead ${i===idx?"selected":""}" data-i="${i}" tabindex="0">
+      <td style="color:var(--faint);font-family:var(--mono)">${i+1}</td>
+      <td><div class="co"><span class="av ${L.av}">${L.initials}</span><div><div class="co-name">${L.name}</div><div class="co-sub">${L.sub}</div></div></div></td>
+      <td class="mono ${sc(L.score)}">${L.score}</td>
+      <td><span class="bar"><i style="width:${L.conf}%"></i></span>${L.conf}</td>
+      <td><span class="rec ${REC_C[L.rec]}">${REC_L[L.rec]}</span></td>
+      <td>${badges(L.badges)||'<span style="color:var(--faint)">—</span>'}</td>
+      <td class="mono" style="color:var(--muted)">${L.evid}</td>
+    </tr>`).join("");
+  document.querySelectorAll("tr.lead").forEach(r => {
+    const go = () => { idx = +r.dataset.i; render(); };
+    r.addEventListener("click", go);
+    r.addEventListener("keydown", e => { if (e.key==="Enter"||e.key===" ") { e.preventDefault(); go(); }});
+  });
+}
+function renderDetail() {
+  const L = LEADS[idx];
+  document.getElementById("detail").innerHTML = `
+    <div class="panel-block">
+      <div class="ph"><span>Selected lead</span><span>${L.id.toUpperCase()}</span></div>
+      <div class="sel-head">
+        <span class="av ${L.av}">${L.initials}</span>
+        <div><div class="sel-title">${L.name}</div><div style="color:var(--muted)">${L.sub}</div></div>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="v ${sc(L.score)}">${L.score}</div><div class="l">Score</div></div>
+        <div class="metric"><div class="v" style="color:var(--sky)">${L.conf}</div><div class="l">Conf</div></div>
+        <div class="metric"><div class="v" style="font-size:11px;padding-top:3px"><span class="rec ${REC_C[L.rec]}">${REC_L[L.rec]}</span></div><div class="l">Rec</div></div>
+        <div class="metric"><div class="v">${L.evid}</div><div class="l">Evidence</div></div>
+      </div>
+      ${badges(L.badges)}
+    </div>
+    <div class="panel-block">
+      <div class="ph">Company DNA</div>
+      <div class="dna-grid">${Object.entries(L.dna).map(([k,v])=>`<div class="df"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("")}</div>
+    </div>
+    ${L.risks.length?`<div class="panel-block"><div class="ph">Risks</div>${L.risks.map(r=>`<div class="risk">${r}</div>`).join("")}</div>`:""}
+    <div class="panel-block">
+      <div class="ph"><span>Evidence quotes</span><span>${L.evidence.length} shown</span></div>
+      ${L.evidence.map(e=>`<article class="ev"><q>“${e.q}”</q><div class="m"><span>${e.field} · ${e.src}</span><a href="${e.url}" target="_blank" rel="noopener">link ↗</a></div></article>`).join("")}
+    </div>`;
+}
+function render(){ renderTable(); renderDetail(); }
+render();
+
+document.addEventListener("keydown", e => {
+  if (e.target.matches("input,textarea")) return;
+  if (e.key === "ArrowDown") { e.preventDefault(); idx = Math.min(LEADS.length-1, idx+1); render(); }
+  if (e.key === "ArrowUp") { e.preventDefault(); idx = Math.max(0, idx-1); render(); }
+  if (e.key === "r" || e.key === "R") { if (!e.metaKey && !e.ctrlKey) document.getElementById("btnRun").click(); }
+});
+document.getElementById("btnRun").addEventListener("click", () => {
+  const t = document.getElementById("toast");
+  t.classList.add("show");
+  clearTimeout(window.__t); window.__t = setTimeout(() => t.classList.remove("show"), 2000);
+});
+</script>
+</body>
+</html>

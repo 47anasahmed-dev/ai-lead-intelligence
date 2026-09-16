@@ -23,6 +23,16 @@ export type CompanyListItem = {
   employeeRange: string | null;
   ownership: string | null;
   businessModel: string | null;
+  website?: string | null;
+  linkedinUrl?: string | null;
+};
+
+export type SearchRefCompany = {
+  id: string;
+  name: string;
+  industry?: string | null;
+  website?: string | null;
+  linkedinUrl?: string | null;
 };
 
 export type SearchSummary = {
@@ -30,8 +40,17 @@ export type SearchSummary = {
   type: string;
   status: string;
   createdAt: string;
-  references: Array<{ company: { id: string; name: string } }>;
+  idealDna?: unknown;
+  references: Array<{ company: SearchRefCompany }>;
   _count?: { qualifications: number };
+};
+
+export type EvidenceItem = {
+  field: string;
+  value: string;
+  source: string;
+  url?: string;
+  evidenceQuote?: string;
 };
 
 export type ResultRow = {
@@ -45,6 +64,8 @@ export type ResultRow = {
     employeeRange: string | null;
     ownership: string | null;
     website: string | null;
+    linkedinUrl?: string | null;
+    businessModel?: string | null;
   };
   qualificationScore: number;
   businessFit: number;
@@ -56,7 +77,62 @@ export type ResultRow = {
   risks: string[];
   missingInformation: string[];
   similarityScore: number | null;
+  similarityDimensions: {
+    industry: number;
+    services: number;
+    customers: number;
+    businessModel: number;
+    size: number;
+    ownership: number;
+    geography: number;
+    growth: number;
+  } | null;
   similarityExplanation: string[];
+  evidence?: EvidenceItem[];
+};
+
+export type CompanyDnaPayload = {
+  companyId?: string;
+  identity?: {
+    name?: string;
+    website?: string | null;
+    industry?: string | null;
+    primaryService?: string | null;
+    description?: string | null;
+  };
+  customers?: { profile?: string | null };
+  businessModel?: { model?: string | null; revenueModel?: string | null };
+  size?: { employeeRange?: string | null; estimatedRevenueUsd?: number | null };
+  ownership?: { type?: string | null };
+  growth?: { signal?: string | null; foundedYear?: number | null };
+  reputation?: { signal?: string | null };
+  technology?: { stack?: string | null };
+  geography?: {
+    region?: string | null;
+    country?: string | null;
+    city?: string | null;
+    state?: string | null;
+  };
+  facts?: string[];
+  inferences?: string[];
+  unknowns?: string[];
+  evidence?: EvidenceItem[];
+  confidence?: number;
+};
+
+export type CompanyDetail = {
+  id: string;
+  name: string;
+  industry: string | null;
+  geography: string | null;
+  employeeRange: string | null;
+  ownership: string | null;
+  website: string | null;
+  linkedinUrl?: string | null;
+  businessModel: string | null;
+  primaryService: string | null;
+  dna: CompanyDnaPayload | null;
+  evidence?: EvidenceItem[];
 };
 
 export const client = {
@@ -65,7 +141,7 @@ export const client = {
     api<{ data: CompanyListItem[] }>(
       `/companies?limit=${limit}${q ? `&q=${encodeURIComponent(q)}` : ''}`,
     ),
-  getCompany: (id: string) => api<{ data: Record<string, unknown> }>(`/companies/${id}`),
+  getCompany: (id: string) => api<{ data: CompanyDetail }>(`/companies/${id}`),
   listSearches: () => api<{ data: SearchSummary[] }>('/searches'),
   createSearch: (companyIds: string[]) =>
     api<{ data: { id: string } }>('/searches', {
@@ -73,13 +149,39 @@ export const client = {
       body: JSON.stringify({ type: 'reference', companyIds }),
     }),
   runSearch: (id: string) =>
-    api<{ data: { filteredCount: number; topResults: unknown[] } }>(
+    api<{ data: { searchId: string; status: string; started?: boolean } }>(
       `/searches/${id}/run`,
-      { method: 'POST' },
+      { method: 'POST', body: JSON.stringify({}) },
     ),
-  getSearch: (id: string) => api<{ data: SearchSummary & { idealDna?: unknown } }>(`/searches/${id}`),
-  getResults: (id: string) =>
-    api<{ data: ResultRow[]; meta: { status: string; count: number } }>(
-      `/searches/${id}/results`,
-    ),
+  getSearch: (id: string) =>
+    api<{
+      data: SearchSummary & {
+        idealDna?: CompanyDnaPayload | null;
+        references: Array<{
+          company: SearchRefCompany & { industry?: string | null };
+        }>;
+      };
+    }>(`/searches/${id}`),
+  getResults: (id: string, limit = 100) =>
+    api<{
+      data: ResultRow[];
+      meta: {
+        status: string;
+        count: number;
+        totalCount: number;
+        limit: number;
+        idealDna?: CompanyDnaPayload | null;
+      };
+    }>(`/searches/${id}/results?limit=${limit}`),
+  refreshEvidence: (companyId: string) =>
+    api<{
+      data: {
+        didEnrich?: boolean;
+        status?: string | null;
+        evidenceCount?: number;
+      };
+    }>(`/companies/${companyId}/refresh-evidence`, {
+      method: 'POST',
+      body: '{}',
+    }),
 };

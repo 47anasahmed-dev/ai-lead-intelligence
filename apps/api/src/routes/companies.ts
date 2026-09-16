@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
+import { resolveEvidence } from '../lib/evidence.js';
 import { companyToDna } from '../services/companyMapper.js';
 
 export async function companyRoutes(app: FastifyInstance) {
@@ -30,6 +31,7 @@ export async function companyRoutes(app: FastifyInstance) {
         id: true,
         name: true,
         website: true,
+        linkedinUrl: true,
         industry: true,
         primaryService: true,
         employeeRange: true,
@@ -52,12 +54,19 @@ export async function companyRoutes(app: FastifyInstance) {
     const profile = await prisma.companyProfile.findUnique({
       where: { companyId: id },
     });
-    const dna = profile?.dna ?? companyToDna(company);
-    const evidence = await prisma.evidence.findMany({
+    const liveDna = companyToDna(company);
+    const dna = profile?.dna ?? liveDna;
+    const tableEvidence = await prisma.evidence.findMany({
       where: { companyId: id },
       take: 50,
       orderBy: { createdAt: 'desc' },
     });
+
+    const evidence = resolveEvidence(
+      tableEvidence,
+      dna as { evidence?: Array<{ field: string; value: string; source: string; url?: string; evidenceQuote?: string }> },
+      liveDna.evidence,
+    );
 
     // Strip demoFit from public detail payload (metadata only in DB)
     const { demoFit: _demoFit, rawData: _raw, ...publicCompany } = company;

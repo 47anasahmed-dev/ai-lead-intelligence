@@ -22,7 +22,9 @@ RULES (mandatory):
 3. Every inference and filledUnknown MUST include evidenceQuote that is a VERBATIM substring of SOURCE TEXT.
 4. Never invent company facts, numbers, ownership, funding, or customers.
 5. demo_fit and similar demo labels must be ignored if present.
-6. Return JSON only matching the schema.`;
+6. Return redFlags ONLY when SOURCE TEXT clearly supports a negative finding (e.g. shutdown, lawsuit, nonprofit-only, no commercial product). Each redFlag must be grounded in SOURCE TEXT.
+7. If the page has little or no useful company information, set researchNote to a short explanation and leave findings empty.
+8. Return JSON only matching the schema.`;
 
 export interface WebsiteResearchInput {
   companyId: string;
@@ -36,6 +38,17 @@ export interface WebsiteResearchOutput {
   evidence: EvidenceItem[];
   sourceTextLength: number;
   skipped?: string;
+}
+
+function emptyEnrichment(unknowns: string[], researchNote?: string): EnrichmentResult {
+  return {
+    inferences: [],
+    filledUnknowns: [],
+    narrativeBullets: [],
+    unknownsRemaining: unknowns,
+    redFlags: [],
+    ...(researchNote ? { researchNote } : {}),
+  };
 }
 
 function normalizeUrl(raw: string): string | null {
@@ -104,12 +117,7 @@ export async function researchWebsite(
   const url = normalizeUrl(input.websiteUrl);
   if (!url) {
     return {
-      enrichment: {
-        inferences: [],
-        filledUnknowns: [],
-        narrativeBullets: [],
-        unknownsRemaining: input.unknowns,
-      },
+      enrichment: emptyEnrichment(input.unknowns, 'Invalid or missing website URL'),
       evidence: [],
       sourceTextLength: 0,
       skipped: 'invalid_url',
@@ -119,12 +127,7 @@ export async function researchWebsite(
   // Noop / disabled AI: skip network + model (deterministic path)
   if (ai.name === 'noop') {
     return {
-      enrichment: {
-        inferences: [],
-        filledUnknowns: [],
-        narrativeBullets: [],
-        unknownsRemaining: input.unknowns,
-      },
+      enrichment: emptyEnrichment(input.unknowns, 'AI provider disabled (noop)'),
       evidence: [],
       sourceTextLength: 0,
       skipped: 'ai_noop',
@@ -134,12 +137,7 @@ export async function researchWebsite(
   const fetched = await fetchWebsiteText(url);
   if (!fetched) {
     return {
-      enrichment: {
-        inferences: [],
-        filledUnknowns: [],
-        narrativeBullets: [],
-        unknownsRemaining: input.unknowns,
-      },
+      enrichment: emptyEnrichment(input.unknowns, 'Website fetch failed'),
       evidence: [],
       sourceTextLength: 0,
       skipped: 'fetch_failed',
@@ -162,7 +160,9 @@ SOURCE TEXT:
 ${sourceText}
 """
 
-Return JSON with inferences, filledUnknowns (field/value/evidenceQuote), narrativeBullets, unknownsRemaining.
+Return JSON with inferences, filledUnknowns (field/value/evidenceQuote), narrativeBullets, unknownsRemaining, redFlags, and optional researchNote.
+- redFlags: only negative findings with clear support in SOURCE TEXT (e.g. shutdown, lawsuit, nonprofit-only, no product).
+- researchNote: short note when the page has little/no useful company info.
 evidenceQuote MUST be copied verbatim from SOURCE TEXT.`;
 
   let raw: unknown;
@@ -174,12 +174,7 @@ evidenceQuote MUST be copied verbatim from SOURCE TEXT.`;
     });
   } catch {
     return {
-      enrichment: {
-        inferences: [],
-        filledUnknowns: [],
-        narrativeBullets: [],
-        unknownsRemaining: input.unknowns,
-      },
+      enrichment: emptyEnrichment(input.unknowns, 'AI enrichment error'),
       evidence: [],
       sourceTextLength: sourceText.length,
       skipped: 'ai_error',
@@ -187,6 +182,16 @@ evidenceQuote MUST be copied verbatim from SOURCE TEXT.`;
   }
 
   const enrichment = sanitizeEnrichment(raw, sourceText);
+
+  const hasFindings =
+    enrichment.filledUnknowns.length > 0 ||
+    enrichment.inferences.length > 0 ||
+    enrichment.narrativeBullets.length > 0 ||
+    enrichment.redFlags.length > 0;
+
+  if (!hasFindings && !enrichment.researchNote) {
+    enrichment.researchNote = 'No usable findings after quote filter';
+  }
 
   const evidence: EvidenceItem[] = enrichment.filledUnknowns.map((f) => ({
     field: f.field,

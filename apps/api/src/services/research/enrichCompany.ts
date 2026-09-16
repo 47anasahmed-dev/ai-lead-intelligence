@@ -133,6 +133,61 @@ function recomputeUnknownsAndConfidence(dna: CompanyDna): void {
   dna.confidence = Math.min(95, Math.max(dna.confidence, base));
 }
 
+function pushUniqueInference(dna: CompanyDna, label: string): void {
+  if (!dna.inferences.includes(label)) dna.inferences.push(label);
+}
+
+function stampResearchStatus(
+  dna: CompanyDna,
+  status: 'fetch_failed' | 'invalid_url' | 'ai_error' | 'empty' | 'ok',
+  researchNote?: string,
+  redFlags: string[] = [],
+): void {
+  // Replace prior AI research stamps so re-runs stay idempotent
+  dna.inferences = dna.inferences.filter(
+    (i) =>
+      !i.startsWith('AI research status:') &&
+      !i.startsWith('AI research:') &&
+      !i.startsWith('AI red flag:'),
+  );
+  pushUniqueInference(dna, `AI research status: ${status}`);
+  const note =
+    researchNote?.trim() ||
+    (status === 'fetch_failed'
+      ? 'Website fetch failed'
+      : status === 'invalid_url'
+        ? 'Invalid or missing website URL'
+        : status === 'ai_error'
+          ? 'AI enrichment error'
+          : status === 'empty'
+            ? 'No usable findings after quote filter'
+            : undefined);
+  if (note) {
+    pushUniqueInference(dna, `AI research: ${note}`);
+  }
+  for (const flag of redFlags) {
+    const t = flag.trim();
+    if (t) pushUniqueInference(dna, `AI red flag: ${t}`);
+  }
+}
+
+function applyConfidencePenalties(
+  dna: CompanyDna,
+  status: 'fetch_failed' | 'invalid_url' | 'ai_error' | 'empty' | 'ok',
+  redFlagCount: number,
+): void {
+  let penalty = 0;
+  if (status === 'fetch_failed' || status === 'invalid_url') {
+    penalty += 15;
+  } else if (status === 'empty' || status === 'ai_error') {
+    penalty += 10;
+  }
+  penalty += Math.min(20, redFlagCount * 5);
+  if (penalty > 0) {
+    dna.confidence = Math.max(10, dna.confidence - penalty);
+  }
+}
+
 /**
  * Enrich a single CompanyDna via website research when AI is live.
  * Returns a new DNA object (does not mutate the input).
@@ -142,8 +197,15 @@ export async function enrichCompanyDna(
   ai: AiProvider,
 ): Promise<{ dna: CompanyDna; didEnrich: boolean }> {
   const website = dna.identity.website;
-  if (!website || ai.name === 'noop') {
+  if (ai.name === 'noop') {
     return { dna, didEnrich: false };
+  }
+  // Still stamp invalid_url so catalog batch covers companies without a website
+  if (!website) {
+    const next: CompanyDna = structuredClone(dna);
+    stampResearchStatus(next, 'invalid_url', 'Invalid or missing website URL');
+    applyConfidencePenalties(next, 'invalid_url', 0);
+    return { dna: next, didEnrich: true };
   }
 
   const unknowns = listUnknowns(dna);
@@ -155,17 +217,31 @@ export async function enrichCompanyDna(
     existingFacts: dna.facts,
   });
 
-  if (result.skipped || (result.enrichment.filledUnknowns.length === 0 && result.enrichment.inferences.length === 0)) {
-    // May still attach narrative if any
-    if (result.enrichment.narrativeBullets.length === 0) {
-      return { dna, didEnrich: false };
-    }
-  }
+  const enrichment = result.enrichment;
+  const redFlags = enrichment.redFlags ?? [];
+  const hasFindings =
+    enrichment.filledUnknowns.length > 0 ||
+    enrichment.inferences.length > 0 ||
+    enrichment.narrativeBullets.length > 0 ||
+    redFlags.length > 0;
 
   const next: CompanyDna = structuredClone(dna);
   let filledCount = 0;
 
-  for (const fill of result.enrichment.filledUnknowns) {
+  // Resolve research status for DNA stamps (always stamp when we attempted research)
+  let status: 'fetch_failed' | 'invalid_url' | 'ai_error' | 'empty' | 'ok';
+  if (result.skipped === 'fetch_failed') status = 'fetch_failed';
+  else if (result.skipped === 'invalid_url') status = 'invalid_url';
+  else if (result.skipped === 'ai_error') status = 'ai_error';
+  else if (result.skipped === 'ai_noop') {
+    // Shouldn't reach here (noop returns early), but treat as empty
+    status = 'empty';
+  } else if (!hasFindings) status = 'empty';
+  else status = 'ok';
+
+  stampResearchStatus(next, status, enrichment.researchNote, redFlags);
+
+  for (const fill of enrichment.filledUnknowns) {
     const key = fill.field.trim().toLowerCase().replace(/\s+/g, '_');
     const meta = FILLABLE_FIELDS[key] ?? FILLABLE_FIELDS[fill.field];
     if (!meta) {
@@ -185,14 +261,14 @@ export async function enrichCompanyDna(
     filledCount += 1;
   }
 
-  for (const inf of result.enrichment.inferences) {
+  for (const inf of enrichment.inferences) {
     const label = inf.field
       ? `Inference (website/${inf.field}): ${inf.text}`
       : `Inference (website): ${inf.text}`;
     if (!next.inferences.includes(label)) next.inferences.push(label);
   }
 
-  for (const bullet of result.enrichment.narrativeBullets) {
+  for (const bullet of enrichment.narrativeBullets) {
     const label = `Narrative (website): ${bullet}`;
     if (!next.inferences.includes(label)) next.inferences.push(label);
   }
@@ -209,11 +285,14 @@ export async function enrichCompanyDna(
   }
 
   recomputeUnknownsAndConfidence(next);
-  // Small bump when we filled at least one unknown
-  if (filledCount > 0) {
+  // Small bump when we filled at least one unknown (only on ok path)
+  if (status === 'ok' && filledCount > 0) {
     next.confidence = Math.min(95, next.confidence + Math.min(8, filledCount * 2));
   }
+  // Penalties last so recompute upward bump does not erase research outcomes
+  applyConfidencePenalties(next, status, redFlags.length);
 
+  // didEnrich true whenever we stamped status so analysis re-scores
   return { dna: next, didEnrich: true };
 }
 

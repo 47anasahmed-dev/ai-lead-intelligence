@@ -13,7 +13,8 @@
     "prisma:migrate:dev": "prisma migrate dev --name init",
     "prisma:seed": "tsx prisma/seed.ts",
     "import:csv": "tsx scripts/import-csv.ts",
-    "smoke": "tsx scripts/smoke-reference.ts"
+    "smoke": "tsx scripts/smoke-reference.ts",
+    "enrich:all": "tsx scripts/enrich-all.ts"
   },
   "dependencies": {
     "@ali/shared": "workspace:*",
