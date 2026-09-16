@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup C — Canvas Cards · AI Lead Intelligence</title>
+<!--
+  IA TRADEOFF (C): Card canvas over tables. Ideal DNA + peer refs as hero cards;
+  leads as masonry tiles with score rings and inline evidence. Detail opens as
+  overlay modal (no route). Friendliest scan for execs; weaker for sorting/
+  comparing many numeric columns at once vs A/B tables.
+-->
+<style>
+  :root {
+    --bg: #121826;
+    --grad-top: #1A1F2E;
+    --grad-bot: #0A0F1C;
+    --panel: #1A2236;
+    --panel2: #232B3E;
+    --table: #181E2A;
+    --line: #2d3748;
+    --text: #FFFFFF;
+    --muted: #D1D5DB;
+    --faint: #9CA3AF;
+    --teal: #2DD4BF;
+    --teal-solid: #14B8A6;
+    --blue: #3B82F6;
+    --ok: #34d399;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --purple: #c4b5fd;
+    --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font);
+    background: linear-gradient(180deg, var(--grad-top), var(--grad-bot));
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 13px;
+  }
+  button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  a { color: var(--teal); }
+
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 16px 40px; }
+
+  .topbar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 12px 0; border-bottom: 1px solid var(--line); margin-bottom: 16px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 750; font-size: 15px; }
+  .logo {
+    width: 28px; height: 28px; border-radius: 8px; font-size: 11px; font-weight: 800;
+    background: linear-gradient(135deg, var(--teal-solid), var(--blue));
+    color: #042f2e; display: grid; place-items: center;
+  }
+  .mockup-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--teal); background: rgba(20,184,166,0.15); border: 1px solid rgba(20,184,166,0.4);
+    padding: 4px 10px; border-radius: 999px;
+  }
+  .spacer { flex: 1; }
+  .btn-run {
+    background: linear-gradient(135deg, var(--teal-solid), #0d9488);
+    color: #042f2e; font-weight: 750; padding: 8px 18px; border-radius: 8px;
+  }
+  .btn-run:focus-visible, .chip:focus-visible, .lead-card:focus-visible, .modal-close:focus-visible {
+    outline: 2px solid var(--blue); outline-offset: 2px;
+  }
+
+  .recent {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;
+  }
+  .recent .lbl { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+  .chip {
+    font-size: 11px; padding: 4px 10px; border-radius: 999px;
+    background: var(--panel); border: 1px solid var(--line); color: var(--muted);
+  }
+  .chip.active { border-color: rgba(20,184,166,0.45); color: var(--teal); background: rgba(20,184,166,0.12); }
+
+  .hero-row {
+    display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 12px; margin-bottom: 18px;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+  }
+  .card-h {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--faint); margin-bottom: 10px;
+  }
+  .dna-hero {
+    background: linear-gradient(135deg, rgba(20,184,166,0.18), rgba(59,130,246,0.12));
+    border-color: rgba(20,184,166,0.35);
+  }
+  .dna-title { font-size: 18px; font-weight: 750; letter-spacing: -0.02em; margin-bottom: 10px; }
+  .dna-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag {
+    padding: 5px 10px; border-radius: 8px; background: var(--table); border: 1px solid var(--line);
+    font-size: 12px; font-weight: 600;
+  }
+  .tag span { color: var(--faint); font-weight: 500; font-size: 10px; text-transform: uppercase; margin-right: 5px; }
+  .ref-card-inner { display: flex; gap: 12px; align-items: center; }
+  .av {
+    width: 40px; height: 40px; border-radius: 10px; font-weight: 800; font-size: 13px;
+    display: grid; place-items: center; color: #fff; flex-shrink: 0;
+  }
+  .av-sm { width: 28px; height: 28px; border-radius: 7px; font-size: 10px; }
+  .av-adept { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+  .av-bd { background: linear-gradient(135deg, #ef4444, #f97316); }
+  .av-fig { background: linear-gradient(135deg, #0ea5e9, #06b6d4); }
+  .av-cov { background: linear-gradient(135deg, #10b981, #14b8a6); }
+  .av-vic { background: linear-gradient(135deg, #a855f7, #ec4899); }
+  .av-soft { background: linear-gradient(135deg, #64748b, #94a3b8); }
+  .av-path { background: linear-gradient(135deg, #f59e0b, #eab308); }
+  .av-agi { background: linear-gradient(135deg, #3b82f6, #6366f1); }
+  .ref-name { font-weight: 700; font-size: 14px; }
+  .ref-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+  .section-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--faint); margin: 4px 0 12px; display: flex; justify-content: space-between;
+  }
+
+  .masonry {
+    columns: 2; column-gap: 12px;
+  }
+  @media (min-width: 1100px) { .masonry { columns: 3; } }
+  @media (max-width: 720px) {
+    .masonry { columns: 1; }
+    .hero-row { grid-template-columns: 1fr; }
+  }
+
+  .lead-card {
+    break-inside: avoid; margin-bottom: 12px; display: block; width: 100%; text-align: left;
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .lead-card:hover, .lead-card.selected {
+    border-color: rgba(20,184,166,0.5);
+    box-shadow: 0 0 0 1px rgba(20,184,166,0.25), 0 10px 28px rgba(0,0,0,0.35);
+  }
+  .lead-top { display: flex; gap: 12px; align-items: flex-start; }
+  .lead-meta { flex: 1; min-width: 0; }
+  .lead-name { font-weight: 750; font-size: 14.5px; }
+  .lead-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .badge { font-size: 10px; font-weight: 650; padding: 2px 6px; border-radius: 4px; }
+  .badge-risk { background: rgba(248,113,113,0.18); color: var(--danger); }
+  .badge-noweb { background: rgba(196,181,253,0.15); color: var(--purple); }
+  .rec {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 3px 7px; border-radius: 6px; display: inline-block; margin-top: 8px;
+  }
+  .rec-contact { background: rgba(52,211,153,0.15); color: var(--ok); border: 1px solid rgba(52,211,153,0.35); }
+  .rec-research { background: rgba(251,191,36,0.12); color: var(--warn); border: 1px solid rgba(251,191,36,0.35); }
+  .rec-monitor { background: rgba(59,130,246,0.15); color: #93c5fd; border: 1px solid rgba(59,130,246,0.35); }
+
+  .ring-wrap { position: relative; width: 52px; height: 52px; flex-shrink: 0; }
+  .ring-wrap svg { transform: rotate(-90deg); }
+  .ring-wrap .num {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    font-family: var(--mono); font-weight: 750; font-size: 13px;
+  }
+  .conf-line { margin-top: 10px; font-size: 11px; color: var(--faint); }
+  .conf-line strong { color: var(--muted); font-weight: 600; }
+  .snippets { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .snip {
+    font-size: 12px; font-style: italic; color: var(--muted);
+    background: var(--table); border-left: 3px solid var(--teal-solid);
+    padding: 6px 8px; border-radius: 0 6px 6px 0; line-height: 1.35;
+  }
+  .snip a { font-style: normal; font-size: 10px; margin-left: 4px; }
+
+  /* Modal overlay */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(10,15,28,0.72); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center; z-index: 30; padding: 20px;
+  }
+  .overlay.open { display: flex; }
+  .modal {
+    width: min(560px, 100%); max-height: min(85vh, 720px); overflow: auto;
+    background: var(--panel); border: 1px solid rgba(20,184,166,0.35); border-radius: 14px;
+    padding: 18px; box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+  }
+  .modal-head { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
+  .modal-close {
+    margin-left: auto; width: 32px; height: 32px; border-radius: 8px;
+    background: var(--panel2); border: 1px solid var(--line); font-size: 16px; color: var(--muted);
+  }
+  .modal-close:hover { color: var(--text); }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+  .stat {
+    background: var(--table); border: 1px solid var(--line); border-radius: 8px; padding: 10px; text-align: center;
+  }
+  .stat .v { font-family: var(--mono); font-size: 18px; font-weight: 750; }
+  .stat .l { font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+  .dna-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 14px; }
+  .df { background: var(--table); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .df .k { font-size: 10px; color: var(--faint); text-transform: uppercase; }
+  .df .v { font-weight: 600; margin-top: 2px; }
+  .sh { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); margin-bottom: 8px; }
+  .risk { padding: 8px 10px; margin-bottom: 6px; border-radius: 8px; background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); color: #fecaca; font-size: 12px; }
+  .ev { background: var(--table); border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+  .ev q { display: block; font-style: italic; color: var(--muted); margin-bottom: 6px; }
+  .ev .m { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(60px);
+    background: var(--teal-solid); color: #042f2e; font-weight: 700; padding: 12px 20px; border-radius: 10px;
+    opacity: 0; transition: all 0.22s; z-index: 50; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .hi { color: var(--ok); } .mid { color: var(--warn); } .lo { color: var(--faint); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar">
+    <div class="brand"><span class="logo">AI</span> Lead Intelligence</div>
+    <span class="mockup-label">Mockup C — pick one</span>
+    <div class="spacer"></div>
+    <button type="button" class="btn-run" id="btnRun">▶ Run</button>
+  </header>
+
+  <div class="recent" aria-label="Recent searches">
+    <span class="lbl">Recent</span>
+    <button type="button" class="chip active">Robotics PE targets</button>
+    <button type="button" class="chip">Adept + BD similar</button>
+    <button type="button" class="chip">Industrial automation US</button>
+    <button type="button" class="chip">Private robotics Series B+</button>
+  </div>
+
+  <div class="hero-row">
+    <article class="card dna-hero" aria-label="Ideal DNA">
+      <div class="card-h">Ideal DNA</div>
+      <div class="dna-title">Robotics / Automation peers</div>
+      <div class="dna-tags">
+        <span class="tag"><span>Industry</span> Robotics/Automation</span>
+        <span class="tag"><span>Ownership</span> Private</span>
+        <span class="tag"><span>Geo</span> Global + US</span>
+        <span class="tag"><span>Growth</span> Growing</span>
+      </div>
+    </article>
+    <article class="card">
+      <div class="card-h">Peer reference</div>
+      <div class="ref-card-inner">
+        <div class="av av-adept" aria-hidden="true">AD</div>
+        <div><div class="ref-name">Adept AI</div><div class="ref-sub">Agentic automation · San Francisco</div></div>
+      </div>
+    </article>
+    <article class="card">
+      <div class="card-h">Peer reference</div>
+      <div class="ref-card-inner">
+        <div class="av av-bd" aria-hidden="true">BD</div>
+        <div><div class="ref-name">Boston Dynamics</div><div class="ref-sub">Mobile robotics · Waltham</div></div>
+      </div>
+    </article>
+  </div>
+
+  <div class="section-label"><span>Ranked leads</span><span>6 cards · click to expand</span></div>
+  <div class="masonry" id="masonry" role="list"></div>
+</div>
+
+<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle" hidden>
+  <div class="modal" id="modal"></div>
+</div>
+<div class="toast" id="toast" role="status">Would start search</div>
+
+<script>
+const LEADS = [
+  { id:"fig", name:"Figure AI", sub:"Humanoid robots · Sunnyvale", av:"av-fig", initials:"FI", score:92, conf:88, rec:"CONTACT_NOW", badges:[], evid:7,
+    dna:{ industry:"Humanoid robotics", ownership:"Private", geo:"US", growth:"Hypergrowth", size:"200–500", customers:"Auto / logistics OEMs" },
+    risks:[],
+    evidence:[
+      { q:"Building general-purpose humanoids for manufacturing and logistics.", field:"identity", url:"https://example.com/figure/about", src:"website" },
+      { q:"Series B closed; expanding Bay Area engineering headcount.", field:"growth", url:"https://example.com/figure/news", src:"news" },
+      { q:"Partnership discussions with automotive OEMs reported.", field:"customers", url:"https://example.com/figure/press", src:"press" }
+    ]},
+  { id:"cov", name:"Covariant", sub:"AI warehouse robotics · Emeryville", av:"av-cov", initials:"CO", score:87, conf:82, rec:"CONTACT_NOW", badges:[], evid:6,
+    dna:{ industry:"Warehouse automation", ownership:"Private", geo:"US + EU", growth:"Growing", size:"100–250", customers:"3PLs / e-commerce" },
+    risks:[],
+    evidence:[
+      { q:"RFM foundation model powers robotic picking across SKUs.", field:"technology", url:"https://example.com/covariant/rfm", src:"website" },
+      { q:"Deployed with major logistics operators in NA and Europe.", field:"geography", url:"https://example.com/covariant/customers", src:"case study" }
+    ]},
+  { id:"vic", name:"Vicarious Systems", sub:"Industrial robot AI · Union City", av:"av-vic", initials:"VI", score:78, conf:65, rec:"RESEARCH_MORE", badges:["risk"], evid:4,
+    dna:{ industry:"Industrial robotics AI", ownership:"Private (acq. signals)", geo:"US", growth:"Unclear", size:"50–150", customers:"Manufacturing" },
+    risks:["Acquisition rumors may change ownership DNA mid-funnel","Sparse recent public hiring signals"],
+    evidence:[
+      { q:"Vision-based robot brains for flexible manufacturing cells.", field:"identity", url:"https://example.com/vicarious/product", src:"website" },
+      { q:"Limited post-2023 product roadmap visibility.", field:"growth", url:"https://example.com/vicarious/blog", src:"blog" }
+    ]},
+  { id:"soft", name:"Soft Robotics", sub:"Gripper systems · Bedford", av:"av-soft", initials:"SR", score:74, conf:71, rec:"RESEARCH_MORE", badges:[], evid:5,
+    dna:{ industry:"End-of-arm tooling", ownership:"Private", geo:"US", growth:"Stable", size:"50–100", customers:"Food / CPG packagers" },
+    risks:[],
+    evidence:[
+      { q:"mGrip soft grippers for irregular food and CPG SKUs.", field:"services", url:"https://example.com/soft/mgrip", src:"website" },
+      { q:"Focus on food packaging lines reduces industrial breadth.", field:"customers", url:"https://example.com/soft/industries", src:"website" }
+    ]},
+  { id:"path", name:"Path Robotics", sub:"Autonomous welding · Columbus", av:"av-path", initials:"PR", score:71, conf:58, rec:"MONITOR", badges:["noweb"], evid:2,
+    dna:{ industry:"Welding automation", ownership:"Private", geo:"US Midwest", growth:"Growing", size:"100–200", customers:"Metal fab shops" },
+    risks:["Low web evidence density — catalog-only enrichment"],
+    evidence:[
+      { q:"Autonomous welding cells for structural metal fabrication.", field:"identity", url:"https://example.com/path/overview", src:"directory" },
+      { q:"Midwest manufacturing footprint; limited global signal.", field:"geography", url:"https://example.com/path/locations", src:"directory" }
+    ]},
+  { id:"agi", name:"Agility Robotics", sub:"Digit bipedal · Corvallis", av:"av-agi", initials:"AG", score:68, conf:75, rec:"RESEARCH_MORE", badges:[], evid:5,
+    dna:{ industry:"Bipedal logistics robots", ownership:"Private", geo:"US", growth:"Growing", size:"150–300", customers:"Warehouses / Amazon pilots" },
+    risks:[],
+    evidence:[
+      { q:"Digit designed for tote moving in human-centric warehouses.", field:"customers", url:"https://example.com/agility/digit", src:"website" },
+      { q:"Multi-year logistics pilot programs expanding.", field:"growth", url:"https://example.com/agility/news", src:"news" }
+    ]}
+];
+
+const REC_C = { CONTACT_NOW:"rec-contact", RESEARCH_MORE:"rec-research", MONITOR:"rec-monitor" };
+const REC_L = { CONTACT_NOW:"Contact now", RESEARCH_MORE:"Research more", MONITOR:"Monitor" };
+const sc = s => s >= 80 ? "hi" : s >= 65 ? "mid" : "lo";
+const ringColor = s => s >= 80 ? "#34d399" : s >= 65 ? "#fbbf24" : "#9CA3AF";
+const badges = b => b.map(x => x === "risk"
+  ? '<span class="badge badge-risk">⚠ Risk</span>'
+  : '<span class="badge badge-noweb">◌ No web data</span>').join("");
+
+function ringSvg(score) {
+  const r = 22, c = 2 * Math.PI * r, pct = Math.min(100, score) / 100;
+  const dash = `${(c * pct).toFixed(1)} ${c.toFixed(1)}`;
+  return `<svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+    <circle cx="26" cy="26" r="${r}" fill="none" stroke="#181E2A" stroke-width="5"/>
+    <circle cx="26" cy="26" r="${r}" fill="none" stroke="${ringColor(score)}" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="${dash}"/>
+  </svg>`;
+}
+
+let selected = null;
+
+function renderCards() {
+  document.getElementById("masonry").innerHTML = LEADS.map(L => {
+    const snips = L.evidence.slice(0, 2).map(e =>
+      `<div class="snip">“${e.q.slice(0, 90)}${e.q.length > 90 ? "…" : ""}” <a href="${e.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a></div>`
+    ).join("");
+    return `<button type="button" class="lead-card ${selected===L.id?"selected":""}" data-id="${L.id}" role="listitem" aria-label="${L.name}, score ${L.score}">
+      <div class="lead-top">
+        <div class="av av-sm ${L.av}" aria-hidden="true">${L.initials}</div>
+        <div class="lead-meta">
+          <div class="lead-name">${L.name}</div>
+          <div class="lead-sub">${L.sub}</div>
+          <div class="badges">${badges(L.badges)}</div>
+          <span class="rec ${REC_C[L.rec]}">${REC_L[L.rec]}</span>
+        </div>
+        <div class="ring-wrap">
+          ${ringSvg(L.score)}
+          <div class="num ${sc(L.score)}">${L.score}</div>
+        </div>
+      </div>
+      <div class="conf-line">Confidence <strong>${L.conf}</strong> · Evidence <strong>${L.evid}</strong></div>
+      <div class="snippets">${snips}</div>
+    </button>`;
+  }).join("");
+  document.querySelectorAll(".lead-card").forEach(btn => {
+    btn.addEventListener("click", () => openModal(btn.dataset.id));
+  });
+}
+
+function openModal(id) {
+  selected = id;
+  renderCards();
+  const L = LEADS.find(x => x.id === id);
+  const overlay = document.getElementById("overlay");
+  document.getElementById("modal").innerHTML = `
+    <div class="modal-head">
+      <div class="av ${L.av}" aria-hidden="true">${L.initials}</div>
+      <div>
+        <div class="lead-name" id="modalTitle" style="font-size:18px">${L.name}</div>
+        <div class="lead-sub">${L.sub}</div>
+        <div class="badges" style="margin-top:6px">${badges(L.badges)}</div>
+      </div>
+      <button type="button" class="modal-close" id="modalClose" aria-label="Close">×</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="v ${sc(L.score)}">${L.score}</div><div class="l">Qualify</div></div>
+      <div class="stat"><div class="v" style="color:var(--blue)">${L.conf}</div><div class="l">Confidence</div></div>
+      <div class="stat"><div class="v" style="font-size:11px;padding-top:4px"><span class="rec ${REC_C[L.rec]}">${REC_L[L.rec]}</span></div><div class="l">Action</div></div>
+    </div>
+    <div class="sh">Company DNA</div>
+    <div class="dna-grid">${Object.entries(L.dna).map(([k,v])=>`<div class="df"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("")}</div>
+    ${L.risks.length ? `<div class="sh">Risks</div>${L.risks.map(r=>`<div class="risk">${r}</div>`).join("")}` : ""}
+    <div class="sh">Evidence quotes</div>
+    ${L.evidence.map(e=>`<article class="ev"><q>“${e.q}”</q><div class="m"><span>${e.field} · ${e.src}</span><a href="${e.url}" target="_blank" rel="noopener">source ↗</a></div></article>`).join("")}
+  `;
+  overlay.hidden = false;
+  overlay.classList.add("open");
+  document.getElementById("modalClose").addEventListener("click", closeModal);
+  overlay.addEventListener("click", e => { if (e.target === overlay) closeModal(); });
+  document.getElementById("modalClose").focus();
+}
+
+function closeModal() {
+  const overlay = document.getElementById("overlay");
+  overlay.classList.remove("open");
+  overlay.hidden = true;
+}
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") closeModal();
+});
+
+renderCards();
+
+document.getElementById("btnRun").addEventListener("click", () => {
+  const t = document.getElementById("toast");
+  t.classList.add("show");
+  clearTimeout(window.__t);
+  window.__t = setTimeout(() => t.classList.remove("show"), 2200);
+});
+</script>
+</body>
+</html>

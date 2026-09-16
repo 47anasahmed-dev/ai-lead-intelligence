@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  searches  Search[]
+}
+
+model Company {
+  id                   String   @id // CSV company_id e.g. C001
+  name                 String
+  website              String?
+  industry             String?
+  primaryService       String?
+  country              String?
+  city                 String?
+  state                String?
+  employeeRange        String?
+  estimatedRevenueUsd  Float?
+  foundedYear          Int?
+  ownership            String?
+  customerProfile      String?
+  businessModel        String?
+  revenueModel         String?
+  geography            String?
+  keyServices          String?
+  growthSignal         String?
+  reputationSignal     String?
+  technologyStack      String?
+  linkedinUrl          String?
+  companyDescription   String?
+  /// Metadata only — NEVER used in scoring
+  demoFit              String?
+  rawData              Json?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  profile              CompanyProfile?
+  referenceLinks       ReferenceCompany[]
+  similarityResults    SimilarityResult[]
+  qualifications       Qualification[]
+
+  @@index([name])
+  @@index([industry])
+  @@index([geography])
+}
+
+model CompanyProfile {
+  id        String   @id @default(cuid())
+  companyId String   @unique
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  dna       Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Search {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  type        String   // reference | criteria
+  status      String   @default("draft") // draft | running | completed | failed
+  idealDna    Json?
+  criteria    Json?
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  completedAt DateTime?
+
+  references         ReferenceCompany[]
+  similarityResults  SimilarityResult[]
+  qualifications     Qualification[]
+
+  @@index([userId, createdAt])
+}
+
+model ReferenceCompany {
+  id        String  @id @default(cuid())
+  searchId  String
+  search    Search  @relation(fields: [searchId], references: [id], onDelete: Cascade)
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  @@unique([searchId, companyId])
+}
+
+model SimilarityResult {
+  id           String  @id @default(cuid())
+  searchId     String
+  search       Search  @relation(fields: [searchId], references: [id], onDelete: Cascade)
+  companyId    String
+  company      Company @relation(fields: [companyId], references: [id])
+  overallScore Int
+  dimensions   Json
+  explanation  Json
+
+  @@unique([searchId, companyId])
+  @@index([searchId, overallScore])
+}
+
+model Qualification {
+  id                  String  @id @default(cuid())
+  searchId            String
+  search              Search  @relation(fields: [searchId], references: [id], onDelete: Cascade)
+  companyId           String
+  company             Company @relation(fields: [companyId], references: [id])
+  businessFit         Int
+  strategicFit        Int
+  qualificationScore  Int
+  confidence          Int
+  positiveSignals     Json
+  risks               Json
+  missingInformation  Json
+  recommendation      String
+  hardExclusion       Boolean @default(false)
+
+  @@unique([searchId, companyId])
+  @@index([searchId, qualificationScore])
+}
+
+model Evidence {
+  id        String   @id @default(cuid())
+  companyId String
+  field     String
+  value     String
+  source    String   @default("csv")
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
+}

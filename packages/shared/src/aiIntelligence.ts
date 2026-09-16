@@ -1,0 +1,352 @@
+/**
+ * AI Lead Intelligence surfaces — typed fields + parsers for DNA inference stamps.
+ * Narrative/prose is additive; never used to change deterministic scores.
+ */
+
+export type AiResearchStatus =
+  | 'ok'
+  | 'empty'
+  | 'fetch_failed'
+  | 'invalid_url'
+  | 'ai_error'
+  | 'pending'
+  | 'thin';
+
+/** Distinct from scoring confidence (field completeness). */
+export type AiResearchConfidence = number | null; // 0–100, or null when unknown/pending
+
+export const AI_STATUS_PREFIX = 'AI research status:';
+export const AI_RESEARCH_PREFIX = 'AI research:';
+export const AI_RED_FLAG_PREFIX = 'AI red flag:';
+export const AI_NARRATIVE_PREFIX = 'AI narrative:';
+export const AI_IDEAL_SUMMARY_PREFIX = 'AI Ideal DNA summary:';
+
+export interface AiResearchFields {
+  researchStatus: AiResearchStatus | string | null;
+  researchNote: string | null;
+  redFlags: string[];
+  /** Non-stamp inferences (website inferences, narratives, etc.) */
+  otherInferences: string[];
+  /** Full inference list including stamps (for backward-compatible payloads) */
+  inferences: string[];
+}
+
+export interface FitNarrativePayload {
+  /** Short 2–4 sentence why-this-lead vs Ideal DNA (additive intelligence) */
+  aiFitNarrative: string | null;
+  /** True when prose is an honest thin/awaiting stub, not invented fit copy */
+  aiFitNarrativeThin: boolean;
+}
+
+/**
+ * Pull labeled AI research stamps from DNA inferences.
+ */
+export function extractAiResearchFromInferences(
+  inferences: string[] | undefined | null,
+): AiResearchFields {
+  const list = inferences ?? [];
+  let researchStatus: string | null = null;
+  let researchNote: string | null = null;
+  const redFlags: string[] = [];
+  const otherInferences: string[] = [];
+  for (const i of list) {
+    if (i.startsWith(AI_STATUS_PREFIX)) {
+      researchStatus = i.slice(AI_STATUS_PREFIX.length).trim();
+    } else if (i.startsWith(AI_RESEARCH_PREFIX)) {
+      researchNote = i.slice(AI_RESEARCH_PREFIX.length).trim();
+    } else if (i.startsWith(AI_RED_FLAG_PREFIX)) {
+      const t = i.slice(AI_RED_FLAG_PREFIX.length).trim();
+      if (t) redFlags.push(t);
+    } else if (i.startsWith(AI_IDEAL_SUMMARY_PREFIX)) {
+      // Ideal DNA summary lives on idealDna.idealDnaSummary; skip stamp form here
+      otherInferences.push(i);
+    } else {
+      otherInferences.push(i);
+    }
+  }
+  return {
+    researchStatus,
+    researchNote,
+    redFlags,
+    otherInferences,
+    inferences: list,
+  };
+}
+
+/** Pull labeled AI narrative bullets from similarity explanation lines. */
+export function extractAiNarratives(
+  similarityExplanation: string[] | undefined | null,
+): string[] {
+  if (!similarityExplanation?.length) return [];
+  return similarityExplanation
+    .filter((e) => e.startsWith(AI_NARRATIVE_PREFIX) || /^AI narrative:/i.test(e))
+    .map((e) => e.replace(/^AI narrative:\s*/i, '').trim())
+    .filter(Boolean);
+}
+
+/** Join narrative bullets into a single fit narrative string. */
+export function joinAiFitNarrative(narratives: string[]): string | null {
+  if (!narratives.length) return null;
+  return narratives.join(' ').trim() || null;
+}
+
+/**
+ * AI research confidence (0–100) — distinct from scoring confidence.
+ * Reflects research outcome quality, not DNA field completeness.
+ */
+export function computeAiResearchConfidence(
+  researchStatus: string | null | undefined,
+  opts?: { redFlagCount?: number; hasResearchNote?: boolean; hasWebsiteFindings?: boolean },
+): AiResearchConfidence {
+  if (researchStatus == null || researchStatus === '' || researchStatus === 'pending') {
+    return null;
+  }
+  const redFlags = opts?.redFlagCount ?? 0;
+  let base: number;
+  switch (researchStatus) {
+    case 'ok':
+      base = opts?.hasWebsiteFindings === false ? 55 : 85;
+      if (opts?.hasResearchNote) base = Math.min(90, base + 5);
+      break;
+    case 'thin':
+      base = 40;
+      break;
+    case 'empty':
+      base = 25;
+      break;
+    case 'ai_error':
+      base = 20;
+      break;
+    case 'fetch_failed':
+      base = 15;
+      break;
+    case 'invalid_url':
+      base = 10;
+      break;
+    default:
+      base = 30;
+  }
+  const penalty = Math.min(30, redFlags * 8);
+  return Math.max(0, Math.min(100, base - penalty));
+}
+
+/** Honest thin-status fit copy when research is empty / failed — never invent prose. */
+export function thinFitNarrativeMessage(researchStatus: string | null | undefined): string {
+  switch (researchStatus) {
+    case 'fetch_failed':
+      return 'AI fit narrative thin: website research failed, so no evidence-backed why-this-lead prose is available yet. Deterministic scores still apply.';
+    case 'invalid_url':
+      return 'AI fit narrative thin: no valid website on file for research. Scores reflect CSV/DNA fields only.';
+    case 'ai_error':
+      return 'AI fit narrative thin: enrichment error prevented an evidence-locked fit narrative.';
+    case 'empty':
+      return 'AI fit narrative thin: website research returned no usable findings after quote filtering. No invented fit story.';
+    case 'thin':
+      return 'AI fit narrative thin: limited evidence available to explain fit vs Ideal DNA.';
+    case 'pending':
+    case null:
+    case undefined:
+    case '':
+      return 'AI fit narrative thin: awaiting AI research. Deterministic similarity and qualification scores are already available.';
+    default:
+      return 'AI fit narrative thin: insufficient grounded evidence for a full fit narrative.';
+  }
+}
+
+export function isThinResearchStatus(status: string | null | undefined): boolean {
+  return (
+    status == null ||
+    status === '' ||
+    status === 'pending' ||
+    status === 'empty' ||
+    status === 'fetch_failed' ||
+    status === 'invalid_url' ||
+    status === 'ai_error' ||
+    status === 'thin'
+  );
+}
+
+/** Zod-friendly schema docs for fit narrative structured generate. */
+export const FIT_NARRATIVE_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    fitNarrative: { type: 'string' },
+    narrativeBullets: { type: 'array', items: { type: 'string' } },
+    thin: { type: 'boolean' },
+  },
+  required: ['fitNarrative', 'thin'],
+} as const;
+
+export const IDEAL_DNA_SUMMARY_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    idealDnaSummary: { type: 'string' },
+    thin: { type: 'boolean' },
+  },
+  required: ['idealDnaSummary', 'thin'],
+} as const;
+
+/** Structured schema for ranking-threshold AI suggest. */
+export const THRESHOLD_SUGGEST_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    minQualification: { type: 'number' },
+    minSimilarity: { type: 'number' },
+    minEvidenceCount: { type: 'number' },
+    rationale: { type: 'string' },
+  },
+  required: [
+    'minQualification',
+    'minSimilarity',
+    'minEvidenceCount',
+    'rationale',
+  ],
+} as const;
+
+export type ThresholdSuggestSource = 'ai' | 'heuristic';
+
+/** Ranking floors returned by POST /searches/:id/suggest-thresholds */
+export interface ThresholdSuggestResult {
+  minQualification: number;
+  minSimilarity: number;
+  minEvidenceCount: number;
+  rationale: string;
+  source: ThresholdSuggestSource;
+  /** Optional note when falling back to heuristic (noop / timeout / error) */
+  message?: string;
+}
+
+export type ScoreEvidenceRow = {
+  qualificationScore: number;
+  similarityScore: number | null;
+  evidenceCount: number;
+};
+
+function clampInt(n: number, min: number, max: number): number {
+  if (Number.isNaN(n)) return min;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+/** Default K for outreach shortlist floors (top-N leads after AND filters). */
+export const DEFAULT_THRESHOLD_TOP_K = 5;
+
+const DEFAULT_THRESHOLD_FLOOR = {
+  minQualification: 55,
+  minSimilarity: 60,
+  minEvidenceCount: 2,
+} as const;
+
+/**
+ * K-th best value in a descending sort (index min(K-1, n-1)).
+ * Empty array → null.
+ */
+export function kthBestDescending(values: number[], k: number): number | null {
+  if (!values.length || k < 1) return null;
+  const sorted = [...values].sort((a, b) => b - a);
+  return sorted[Math.min(k - 1, sorted.length - 1)]!;
+}
+
+/**
+ * Top-K floors so roughly the top K leads pass all AND filters
+ * (minQualification AND minSimilarity AND minEvidenceCount).
+ * Tiny epsilon (−1 on scores / evidence) so ≥K usually still pass.
+ * Shared by API (AI fallback) and mirrored on web when @ali/shared is unavailable.
+ */
+export function suggestTopKThresholds(
+  rows: ScoreEvidenceRow[],
+  k: number = DEFAULT_THRESHOLD_TOP_K,
+  defaults: {
+    minQualification: number;
+    minSimilarity: number;
+    minEvidenceCount: number;
+  } = { ...DEFAULT_THRESHOLD_FLOOR },
+): Omit<ThresholdSuggestResult, 'source' | 'message'> {
+  const topK = Math.max(1, Math.round(k) || DEFAULT_THRESHOLD_TOP_K);
+  if (rows.length === 0) {
+    return {
+      ...defaults,
+      rationale:
+        `No scored results yet — using system defaults aimed at a focused top-${topK} outreach shortlist once results arrive.`,
+    };
+  }
+
+  const quals = rows.map((r) => r.qualificationScore);
+  const sims = rows
+    .map((r) => r.similarityScore)
+    .filter((v): v is number => v != null);
+  const evCounts = rows.map((r) => r.evidenceCount);
+
+  const qK = kthBestDescending(quals, topK);
+  const sK = kthBestDescending(sims, topK);
+  const eK = kthBestDescending(evCounts, topK);
+
+  // Epsilon so the K-th lead (and usually a few peers) still clears ≥ floors.
+  const minQualification = clampInt(
+    qK == null ? defaults.minQualification : Math.max(0, qK - 1),
+    0,
+    100,
+  );
+  const minSimilarity = clampInt(
+    sK == null ? defaults.minSimilarity : Math.max(0, sK - 1),
+    0,
+    100,
+  );
+  const minEvidenceCount = clampInt(
+    eK == null ? defaults.minEvidenceCount : Math.max(0, eK - 1),
+    0,
+    50,
+  );
+
+  return {
+    minQualification,
+    minSimilarity,
+    minEvidenceCount,
+    rationale: `Top-${topK} floors from the current distribution so roughly the top ${topK} leads pass all AND filters (qualification, similarity, and evidence) for a focused outreach shortlist.`,
+  };
+}
+
+/**
+ * @deprecated Prefer suggestTopKThresholds — kept as alias for API callers.
+ * Local top-K heuristic for ranking floors (default K=5).
+ */
+export function heuristicSuggestThresholds(
+  rows: ScoreEvidenceRow[],
+  defaults: {
+    minQualification: number;
+    minSimilarity: number;
+    minEvidenceCount: number;
+  } = { ...DEFAULT_THRESHOLD_FLOOR },
+): Omit<ThresholdSuggestResult, 'source' | 'message'> {
+  return suggestTopKThresholds(rows, DEFAULT_THRESHOLD_TOP_K, defaults);
+}
+
+export function clampThresholdSuggest(raw: {
+  minQualification?: unknown;
+  minSimilarity?: unknown;
+  minEvidenceCount?: unknown;
+  rationale?: unknown;
+}): Omit<ThresholdSuggestResult, 'source' | 'message'> | null {
+  const minQualification = Number(raw.minQualification);
+  const minSimilarity = Number(raw.minSimilarity);
+  const minEvidenceCount = Number(raw.minEvidenceCount);
+  if (
+    Number.isNaN(minQualification) ||
+    Number.isNaN(minSimilarity) ||
+    Number.isNaN(minEvidenceCount)
+  ) {
+    return null;
+  }
+  const rationale =
+    typeof raw.rationale === 'string' && raw.rationale.trim()
+      ? raw.rationale.trim().slice(0, 600)
+      : 'AI suggested floors from the score/evidence distribution.';
+  return {
+    minQualification: clampInt(minQualification, 0, 100),
+    minSimilarity: clampInt(minSimilarity, 0, 100),
+    minEvidenceCount: clampInt(minEvidenceCount, 0, 50),
+    rationale,
+  };
+}

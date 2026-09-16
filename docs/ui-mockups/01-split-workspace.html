@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup A — Split Workspace · AI Lead Intelligence</title>
+<!--
+  IA TRADEOFF (A): Classic 3-pane ops console. Always-visible detail drawer means
+  zero page hops for lead inspection, but the left rail costs horizontal space
+  and the table must stay dense. Best when users compare many leads while
+  keeping Ideal DNA + refs in peripheral vision.
+-->
+<style>
+  :root {
+    --bg: #121826;
+    --bg-elev: #1A2236;
+    --bg-panel: #232B3E;
+    --bg-hover: #2a3348;
+    --border: #2d3748;
+    --border-soft: #252d3d;
+    --text: #FFFFFF;
+    --muted: #D1D5DB;
+    --faint: #9CA3AF;
+    --teal: #2DD4BF;
+    --teal-dim: rgba(20, 184, 166, 0.15);
+    --teal-border: rgba(20, 184, 166, 0.4);
+    --navy: #0f2744;
+    --accent: #3B82F6;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --ok: #34d399;
+    --purple: #a78bfa;
+    --radius: 10px;
+    --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font);
+    background: linear-gradient(180deg, #1A1F2E 0%, #0A0F1C 100%);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 48px; padding: 0 16px;
+    background: linear-gradient(180deg, #1A1F2E 0%, #0A0F1C 100%);
+    border-bottom: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; letter-spacing: -0.02em; }
+  .logo {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: linear-gradient(135deg, #14b8a6, #0ea5e9);
+    display: grid; place-items: center; font-size: 12px; font-weight: 800; color: #042f2e;
+  }
+  .mockup-label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--teal); background: var(--teal-dim); border: 1px solid var(--teal-border);
+    padding: 4px 10px; border-radius: 999px;
+  }
+  .btn-run {
+    background: linear-gradient(135deg, #14B8A6, #0d9488);
+    color: #042f2e; font-weight: 700; padding: 8px 18px; border-radius: 8px;
+    box-shadow: 0 0 0 1px rgba(45,212,191,0.3), 0 4px 14px rgba(13,148,136,0.35);
+  }
+  .btn-run:hover { filter: brightness(1.08); }
+  .btn-run:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .workspace {
+    display: grid;
+    grid-template-columns: 220px 1fr 340px;
+    height: calc(100vh - 48px);
+    max-width: 1440px; margin: 0 auto;
+  }
+  .pane {
+    border-right: 1px solid var(--border-soft);
+    overflow: auto;
+    background: var(--bg-elev);
+  }
+  .pane:last-child { border-right: none; background: var(--bg-panel); }
+
+  /* Left rail */
+  .rail-section { padding: 14px 12px; border-bottom: 1px solid var(--border-soft); }
+  .rail-h {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--faint); margin-bottom: 10px;
+  }
+  .ref-card {
+    display: flex; gap: 10px; align-items: center;
+    padding: 8px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--bg-panel); margin-bottom: 8px;
+  }
+  .ref-card.active { border-color: var(--teal-border); background: var(--teal-dim); }
+  .avatar {
+    width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+    display: grid; place-items: center; font-weight: 800; font-size: 11px; color: #fff;
+  }
+  .av-adept { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+  .av-bd { background: linear-gradient(135deg, #ef4444, #f97316); }
+  .av-fig { background: linear-gradient(135deg, #0ea5e9, #06b6d4); }
+  .av-cov { background: linear-gradient(135deg, #10b981, #14b8a6); }
+  .av-vic { background: linear-gradient(135deg, #a855f7, #ec4899); }
+  .av-soft { background: linear-gradient(135deg, #64748b, #94a3b8); }
+  .av-path { background: linear-gradient(135deg, #f59e0b, #eab308); }
+  .av-agi { background: linear-gradient(135deg, #3b82f6, #6366f1); }
+  .ref-meta { min-width: 0; }
+  .ref-name { font-weight: 650; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ref-sub { color: var(--muted); font-size: 11px; }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    font-size: 11px; padding: 4px 9px; border-radius: 999px;
+    background: var(--bg-hover); border: 1px solid var(--border); color: var(--muted);
+    cursor: pointer;
+  }
+  .chip:hover, .chip:focus-visible { border-color: var(--teal-border); color: var(--text); outline: none; }
+  .chip.active { background: var(--teal-dim); border-color: var(--teal-border); color: var(--teal); }
+
+  /* Center */
+  .center { display: flex; flex-direction: column; min-width: 0; background: #181E2A; }
+  .dna-strip {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 12px 14px; border-bottom: 1px solid var(--border-soft);
+    background: linear-gradient(90deg, rgba(20,184,166,0.08), transparent 60%);
+  }
+  .dna-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--teal); margin-right: 4px; }
+  .dna-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px; border-radius: 8px;
+    background: var(--bg-panel); border: 1px solid var(--border);
+    font-size: 12px; font-weight: 550;
+  }
+  .dna-pill .k { color: var(--faint); font-weight: 500; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .table-wrap { flex: 1; overflow: auto; padding: 0 0 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    position: sticky; top: 0; z-index: 1;
+    text-align: left; font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--faint);
+    background: #181E2A; padding: 10px 12px; border-bottom: 1px solid var(--border);
+  }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border-soft); vertical-align: middle; }
+  tr.lead-row { cursor: pointer; }
+  tr.lead-row:hover td { background: var(--bg-hover); }
+  tr.lead-row.selected td {
+    background: rgba(45, 212, 191, 0.08);
+    box-shadow: inset 3px 0 0 var(--teal);
+  }
+  tr.lead-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .co { display: flex; align-items: center; gap: 10px; }
+  .co-name { font-weight: 650; }
+  .co-sub { color: var(--muted); font-size: 11px; }
+  .score {
+    font-family: var(--mono); font-weight: 700; font-size: 14px;
+  }
+  .score.hi { color: var(--ok); }
+  .score.mid { color: var(--warn); }
+  .score.lo { color: var(--muted); }
+  .conf-bar {
+    width: 56px; height: 6px; border-radius: 999px; background: #1e2d4a; overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 6px;
+  }
+  .conf-bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--teal)); border-radius: 999px; }
+  .rec {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 3px 7px; border-radius: 6px; white-space: nowrap;
+  }
+  .rec-contact { background: rgba(52,211,153,0.15); color: var(--ok); border: 1px solid rgba(52,211,153,0.35); }
+  .rec-research { background: rgba(251,191,36,0.12); color: var(--warn); border: 1px solid rgba(251,191,36,0.35); }
+  .rec-monitor { background: rgba(56,189,248,0.12); color: var(--accent); border: 1px solid rgba(56,189,248,0.3); }
+  .rec-reject { background: rgba(248,113,113,0.12); color: var(--danger); border: 1px solid rgba(248,113,113,0.3); }
+  .badges { display: flex; flex-wrap: wrap; gap: 4px; }
+  .badge {
+    font-size: 10px; font-weight: 650; padding: 2px 6px; border-radius: 4px;
+  }
+  .badge-risk { background: rgba(248,113,113,0.15); color: var(--danger); }
+  .badge-noweb { background: rgba(167,139,250,0.15); color: var(--purple); }
+  .ev-count { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+
+  /* Right drawer */
+  .drawer { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+  .drawer-head { display: flex; gap: 12px; align-items: flex-start; }
+  .drawer-head .avatar { width: 44px; height: 44px; font-size: 14px; border-radius: 10px; }
+  .drawer-title { font-size: 16px; font-weight: 750; letter-spacing: -0.02em; }
+  .drawer-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .stat {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+    text-align: center;
+  }
+  .stat .v { font-family: var(--mono); font-size: 18px; font-weight: 700; }
+  .stat .l { font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+  .section-h {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--faint); margin-bottom: 8px;
+  }
+  .dna-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .dna-field {
+    background: var(--bg); border: 1px solid var(--border-soft); border-radius: 8px; padding: 8px 10px;
+  }
+  .dna-field .fk { font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; }
+  .dna-field .fv { font-weight: 600; margin-top: 2px; font-size: 12.5px; }
+  .risk-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .risk-list li {
+    padding: 8px 10px; border-radius: 8px; background: rgba(248,113,113,0.08);
+    border: 1px solid rgba(248,113,113,0.25); color: #fecaca; font-size: 12px;
+  }
+  .evidence { display: flex; flex-direction: column; gap: 8px; }
+  .ev-card {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+  }
+  .ev-quote { font-style: italic; color: #c5d0e6; font-size: 12.5px; margin-bottom: 6px; }
+  .ev-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted); }
+  .ev-meta a { color: var(--teal); text-decoration: none; }
+  .ev-meta a:hover { text-decoration: underline; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: #0f766e; color: #ecfdf5; font-weight: 650; padding: 12px 20px; border-radius: 10px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.4); opacity: 0; transition: all 0.25s ease; z-index: 50;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 1100px) {
+    .workspace { grid-template-columns: 180px 1fr 280px; }
+  }
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <div class="brand"><span class="logo">AI</span> Lead Intelligence</div>
+      <span class="mockup-label">Mockup A — pick one</span>
+    </div>
+    <button type="button" class="btn-run" id="btnRun" aria-label="Run search">▶ Run</button>
+  </header>
+
+  <div class="workspace">
+    <!-- LEFT -->
+    <aside class="pane" aria-label="References and recent searches">
+      <div class="rail-section">
+        <div class="rail-h">Reference companies</div>
+        <div class="ref-card active">
+          <div class="avatar av-adept" aria-hidden="true">AD</div>
+          <div class="ref-meta">
+            <div class="ref-name">Adept AI</div>
+            <div class="ref-sub">Agentic automation · SF</div>
+          </div>
+        </div>
+        <div class="ref-card active">
+          <div class="avatar av-bd" aria-hidden="true">BD</div>
+          <div class="ref-meta">
+            <div class="ref-name">Boston Dynamics</div>
+            <div class="ref-sub">Mobile robotics · Waltham</div>
+          </div>
+        </div>
+        <button type="button" class="chip" style="width:100%;justify-content:center;margin-top:4px;">+ Add reference</button>
+      </div>
+      <div class="rail-section">
+        <div class="rail-h">Recent searches</div>
+        <div class="chip-row">
+          <button type="button" class="chip active">Robotics PE targets</button>
+          <button type="button" class="chip">Adept + BD similar</button>
+          <button type="button" class="chip">Industrial automation US</button>
+          <button type="button" class="chip">Private robotics Series B+</button>
+        </div>
+      </div>
+      <div class="rail-section">
+        <div class="rail-h">Session</div>
+        <div style="color:var(--muted);font-size:12px;">6 ranked · 2 refs · CSV catalog</div>
+      </div>
+    </aside>
+
+    <!-- CENTER -->
+    <main class="center pane" aria-label="Ideal DNA and ranked leads">
+      <div class="dna-strip" role="region" aria-label="Ideal DNA">
+        <span class="dna-label">Ideal DNA</span>
+        <span class="dna-pill"><span class="k">Industry</span> Robotics / Automation</span>
+        <span class="dna-pill"><span class="k">Ownership</span> Private</span>
+        <span class="dna-pill"><span class="k">Geo</span> Global + US</span>
+        <span class="dna-pill"><span class="k">Growth</span> Growing</span>
+        <span class="dna-pill"><span class="k">Model</span> B2B / Enterprise</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Company</th>
+              <th>Score</th>
+              <th>Conf.</th>
+              <th>Recommendation</th>
+              <th>AI</th>
+              <th>Evid.</th>
+            </tr>
+          </thead>
+          <tbody id="leadTable"></tbody>
+        </table>
+      </div>
+    </main>
+
+    <!-- RIGHT -->
+    <aside class="pane drawer" id="drawer" aria-label="Selected lead detail" aria-live="polite"></aside>
+  </div>
+
+  <div class="toast" id="toast" role="status">Would start search</div>
+
+<script>
+const LEADS = [
+  {
+    id: "fig", name: "Figure AI", sub: "Humanoid robots · Sunnyvale", av: "av-fig", initials: "FI",
+    score: 92, conf: 88, rec: "CONTACT_NOW", badges: [], evid: 7,
+    dna: { industry: "Humanoid robotics", ownership: "Private", geo: "US", growth: "Hypergrowth", size: "200–500", customers: "Auto / logistics OEMs" },
+    risks: [],
+    evidence: [
+      { q: "Building general-purpose humanoids for manufacturing and logistics.", field: "identity", url: "https://example.com/figure/about", src: "website" },
+      { q: "Series B closed; expanding Bay Area engineering headcount.", field: "growth", url: "https://example.com/figure/news", src: "news" },
+      { q: "Partnership discussions with automotive OEMs reported.", field: "customers", url: "https://example.com/figure/press", src: "press" }
+    ]
+  },
+  {
+    id: "cov", name: "Covariant", sub: "AI warehouse robotics · Emeryville", av: "av-cov", initials: "CO",
+    score: 87, conf: 82, rec: "CONTACT_NOW", badges: [], evid: 6,
+    dna: { industry: "Warehouse automation", ownership: "Private", geo: "US + EU", growth: "Growing", size: "100–250", customers: "3PLs / e-commerce" },
+    risks: [],
+    evidence: [
+      { q: "RFM foundation model powers robotic picking across SKUs.", field: "technology", url: "https://example.com/covariant/rfm", src: "website" },
+      { q: "Deployed with major logistics operators in NA and Europe.", field: "geography", url: "https://example.com/covariant/customers", src: "case study" }
+    ]
+  },
+  {
+    id: "vic", name: "Vicarious Systems", sub: "Industrial robot AI · Union City", av: "av-vic", initials: "VI",
+    score: 78, conf: 65, rec: "RESEARCH_MORE", badges: ["risk"], evid: 4,
+    dna: { industry: "Industrial robotics AI", ownership: "Private (acq. signals)", geo: "US", growth: "Unclear", size: "50–150", customers: "Manufacturing" },
+    risks: ["Acquisition rumors may change ownership DNA mid-funnel", "Sparse recent public hiring signals"],
+    evidence: [
+      { q: "Vision-based robot brains for flexible manufacturing cells.", field: "identity", url: "https://example.com/vicarious/product", src: "website" },
+      { q: "Limited post-2023 product roadmap visibility.", field: "growth", url: "https://example.com/vicarious/blog", src: "blog" }
+    ]
+  },
+  {
+    id: "soft", name: "Soft Robotics", sub: "Gripper systems · Bedford", av: "av-soft", initials: "SR",
+    score: 74, conf: 71, rec: "RESEARCH_MORE", badges: [], evid: 5,
+    dna: { industry: "End-of-arm tooling", ownership: "Private", geo: "US", growth: "Stable", size: "50–100", customers: "Food / CPG packagers" },
+    risks: [],
+    evidence: [
+      { q: "mGrip soft grippers for irregular food and CPG SKUs.", field: "services", url: "https://example.com/soft/mgrip", src: "website" }
+    ]
+  },
+  {
+    id: "path", name: "Path Robotics", sub: "Autonomous welding · Columbus", av: "av-path", initials: "PR",
+    score: 71, conf: 58, rec: "MONITOR", badges: ["noweb"], evid: 2,
+    dna: { industry: "Welding automation", ownership: "Private", geo: "US Midwest", growth: "Growing", size: "100–200", customers: "Metal fab shops" },
+    risks: ["Low web evidence density — catalog-only enrichment"],
+    evidence: [
+      { q: "Autonomous welding cells for structural metal fabrication.", field: "identity", url: "https://example.com/path/overview", src: "directory" }
+    ]
+  },
+  {
+    id: "agi", name: "Agility Robotics", sub: "Digit bipedal · Corvallis", av: "av-agi", initials: "AG",
+    score: 68, conf: 75, rec: "RESEARCH_MORE", badges: [], evid: 5,
+    dna: { industry: "Bipedal logistics robots", ownership: "Private", geo: "US", growth: "Growing", size: "150–300", customers: "Warehouses / Amazon pilots" },
+    risks: [],
+    evidence: [
+      { q: "Digit designed for tote moving in human-centric warehouses.", field: "customers", url: "https://example.com/agility/digit", src: "website" },
+      { q: "Multi-year logistics pilot programs expanding.", field: "growth", url: "https://example.com/agility/news", src: "news" }
+    ]
+  }
+];
+
+const REC_CLASS = { CONTACT_NOW: "rec-contact", RESEARCH_MORE: "rec-research", MONITOR: "rec-monitor", REJECT: "rec-reject" };
+const REC_LABEL = { CONTACT_NOW: "Contact now", RESEARCH_MORE: "Research more", MONITOR: "Monitor", REJECT: "Reject" };
+
+function scoreClass(s) { return s >= 80 ? "hi" : s >= 65 ? "mid" : "lo"; }
+
+function badgeHtml(badges) {
+  return badges.map(b => b === "risk"
+    ? '<span class="badge badge-risk">⚠ Risk</span>'
+    : '<span class="badge badge-noweb">◌ No web data</span>').join("");
+}
+
+function renderTable(selectedId) {
+  const tb = document.getElementById("leadTable");
+  tb.innerHTML = LEADS.map(L => `
+    <tr class="lead-row ${L.id === selectedId ? "selected" : ""}" data-id="${L.id}" tabindex="0" role="button" aria-selected="${L.id === selectedId}">
+      <td><div class="co"><div class="avatar ${L.av}" aria-hidden="true">${L.initials}</div><div><div class="co-name">${L.name}</div><div class="co-sub">${L.sub}</div></div></div></td>
+      <td><span class="score ${scoreClass(L.score)}">${L.score}</span></td>
+      <td><span class="conf-bar" title="${L.conf}%"><i style="width:${L.conf}%"></i></span>${L.conf}</td>
+      <td><span class="rec ${REC_CLASS[L.rec]}">${REC_LABEL[L.rec]}</span></td>
+      <td><div class="badges">${badgeHtml(L.badges) || '<span style="color:var(--faint)">—</span>'}</div></td>
+      <td class="ev-count">${L.evid}</td>
+    </tr>`).join("");
+  tb.querySelectorAll(".lead-row").forEach(row => {
+    const sel = () => selectLead(row.dataset.id);
+    row.addEventListener("click", sel);
+    row.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); sel(); } });
+  });
+}
+
+function renderDrawer(L) {
+  document.getElementById("drawer").innerHTML = `
+    <div class="drawer-head">
+      <div class="avatar ${L.av}" aria-hidden="true">${L.initials}</div>
+      <div>
+        <div class="drawer-title">${L.name}</div>
+        <div class="drawer-sub">${L.sub}</div>
+        <div class="badges" style="margin-top:6px">${badgeHtml(L.badges)}</div>
+      </div>
+    </div>
+    <div class="stat-row">
+      <div class="stat"><div class="v score ${scoreClass(L.score)}">${L.score}</div><div class="l">Qualify</div></div>
+      <div class="stat"><div class="v" style="color:var(--accent)">${L.conf}</div><div class="l">Confidence</div></div>
+      <div class="stat"><div class="v" style="font-size:11px;padding-top:4px"><span class="rec ${REC_CLASS[L.rec]}">${REC_LABEL[L.rec]}</span></div><div class="l">Action</div></div>
+    </div>
+    <div>
+      <div class="section-h">Company DNA</div>
+      <div class="dna-grid">
+        ${Object.entries(L.dna).map(([k,v]) => `<div class="dna-field"><div class="fk">${k}</div><div class="fv">${v}</div></div>`).join("")}
+      </div>
+    </div>
+    ${L.risks.length ? `<div><div class="section-h">Risks</div><ul class="risk-list">${L.risks.map(r => `<li>${r}</li>`).join("")}</ul></div>` : ""}
+    <div>
+      <div class="section-h">Evidence (${L.evidence.length})</div>
+      <div class="evidence">
+        ${L.evidence.map(e => `
+          <article class="ev-card">
+            <p class="ev-quote">“${e.q}”</p>
+            <div class="ev-meta"><span>${e.field} · ${e.src}</span><a href="${e.url}" target="_blank" rel="noopener">source ↗</a></div>
+          </article>`).join("")}
+      </div>
+    </div>`;
+}
+
+let selected = LEADS[0].id;
+function selectLead(id) {
+  selected = id;
+  const L = LEADS.find(x => x.id === id);
+  renderTable(selected);
+  renderDrawer(L);
+}
+selectLead(selected);
+
+document.getElementById("btnRun").addEventListener("click", () => {
+  const t = document.getElementById("toast");
+  t.classList.add("show");
+  clearTimeout(window.__toastT);
+  window.__toastT = setTimeout(() => t.classList.remove("show"), 2200);
+});
+</script>
+</body>
+</html>

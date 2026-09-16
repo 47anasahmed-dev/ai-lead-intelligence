@@ -1,0 +1,42 @@
+# Oracle Always Free — separate project from Dropcommerce (ports 5433 + 3001 localhost-only)
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ali-postgres
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5433:5432"
+    environment:
+      POSTGRES_USER: ali
+      POSTGRES_PASSWORD: ali
+      POSTGRES_DB: ali
+    volumes:
+      - ali_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ali -d ali"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: ali-api:latest
+    container_name: ali-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3001:3001"
+    env_file:
+      - .env.production
+    environment:
+      DATABASE_URL: postgresql://ali:ali@postgres:5432/ali?schema=public
+      API_PORT: "3001"
+      API_HOST: "0.0.0.0"
+      NODE_ENV: production
+
+volumes:
+  ali_pg_data:
