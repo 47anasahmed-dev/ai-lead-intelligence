@@ -121,7 +121,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
         }
       }}
       className={cn(
-        'relative flex flex-col rounded-xl border p-3.5 text-left transition-all cursor-pointer outline-none',
+        'relative flex flex-col rounded-xl border p-4 text-left transition-all cursor-pointer outline-none',
         'focus-visible:ring-2 focus-visible:ring-teal-400/60',
         'bg-[#1A2236] hover:bg-[#1f2940]',
         selected
@@ -137,7 +137,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
       )}
       {/* Left: name + rings; right: Qualify then rec — never share one cell */}
       <div className="flex items-start gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-3.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <span
               className={cn(
@@ -179,7 +179,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
             />
           </div>
         </div>
-        <div className="flex shrink-0 flex-col items-center gap-1.5">
+        <div className="flex shrink-0 flex-col items-center gap-2">
           <QualifyScore
             score={row.qualificationScore}
             businessFit={row.businessFit}
@@ -195,7 +195,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
       </div>
 
       {chips.length > 0 && (
-        <div className="mt-2.5 flex flex-wrap gap-1.5">
+        <div className="mt-3 flex flex-wrap gap-1.5">
           {chips.map((c) => (
             <span
               key={`${c.label}-${c.full}`}
@@ -210,7 +210,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
 
       <div
         className={cn(
-          'mt-2.5 flex items-start gap-1.5 text-[11px] leading-snug',
+          'mt-3 flex items-start gap-1.5 text-[11px] leading-snug',
           oneLiner.thin ? 'text-slate-500 italic' : 'text-teal-200/90',
         )}
       >
