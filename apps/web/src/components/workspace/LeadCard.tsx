@@ -121,7 +121,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
         }
       }}
       className={cn(
-        'relative flex flex-col gap-2 rounded-xl border p-4 text-left transition-all cursor-pointer outline-none',
+        'relative flex flex-col gap-1 rounded-xl border p-4 text-left transition-all cursor-pointer outline-none',
         'focus-visible:ring-2 focus-visible:ring-teal-400/60',
         'bg-[#1A2236] hover:bg-[#1f2940]',
         selected
@@ -162,7 +162,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
         />
       </div>
 
-      <div className="flex items-end justify-between gap-2">
+      <div className="-mt-0.5 flex items-end justify-between gap-2">
         <div className="flex gap-3">
           <MetricRing
             label="Similarity"
