@@ -261,7 +261,7 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
       </header>
 
       {/* Workspace grid */}
-      <div className="grid min-h-0 flex-1 grid-cols-[220px_1fr_340px]">
+      <div className="grid min-h-0 flex-1 grid-cols-[220px_1fr_360px]">
         <LeftRail
           references={references}
           onReferencesChange={(refs) => {

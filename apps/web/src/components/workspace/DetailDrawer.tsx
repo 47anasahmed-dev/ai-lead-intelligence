@@ -114,7 +114,7 @@ export function DetailDrawer({ selection, searchId }: Props) {
 
   if (!selection) {
     return (
-      <aside className="flex h-full flex-col border-l border-[#2d3748] bg-[#232B3E]">
+      <aside className="flex h-full w-full min-w-0 flex-col border-l border-[#2d3748] bg-[#232B3E]">
         <EmptyState />
       </aside>
     );
@@ -124,7 +124,7 @@ export function DetailDrawer({ selection, searchId }: Props) {
     return (
       <aside
         className={cn(
-          'flex h-full flex-col overflow-hidden border-l border-[#2d3748] bg-[#232B3E] transition-[box-shadow] duration-350',
+          'flex h-full w-full min-w-0 flex-col overflow-hidden border-l border-[#2d3748] bg-[#232B3E] transition-[box-shadow] duration-350',
           liveFeed && 'shadow-[inset_3px_0_0_#2DD4BF]',
         )}
       >
@@ -145,7 +145,7 @@ export function DetailDrawer({ selection, searchId }: Props) {
   return (
     <aside
       className={cn(
-        'flex h-full flex-col overflow-hidden border-l border-[#2d3748] bg-[#232B3E] transition-[box-shadow] duration-350',
+        'flex h-full w-full min-w-0 flex-col overflow-hidden border-l border-[#2d3748] bg-[#232B3E] transition-[box-shadow] duration-350',
         liveFeed && 'shadow-[inset_3px_0_0_#2DD4BF]',
       )}
     >

@@ -147,7 +147,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
           </span>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono text-slate-500">#{rank}</span>
+              <span className="text-xs font-mono font-semibold text-[#D1D5DB]">#{rank}</span>
               <span className="truncate text-sm font-semibold text-white">{row.company.name}</span>
             </div>
             <div className="truncate text-[11px] text-slate-400">
