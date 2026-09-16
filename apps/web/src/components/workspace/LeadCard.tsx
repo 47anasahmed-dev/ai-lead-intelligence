@@ -1,5 +1,6 @@
 'use client';
 
+import type { CSSProperties } from 'react';
 import { AlertTriangle, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ResultRow } from '@/lib/api';
@@ -7,12 +8,12 @@ import { companyDnaChips, compactDnaChips, aiRiskHint, leadAiOneLiner } from '@/
 import { MetricRing, QualifyScore } from './MetricRing';
 
 const AVATAR = [
-  'bg-violet-500/30 text-violet-200',
-  'bg-sky-500/30 text-sky-200',
-  'bg-emerald-500/30 text-emerald-200',
-  'bg-amber-500/30 text-amber-200',
-  'bg-rose-500/30 text-rose-200',
-  'bg-teal-500/30 text-teal-200',
+  'bg-gradient-to-br from-indigo-500 to-violet-500 text-white',
+  'bg-gradient-to-br from-red-500 to-orange-500 text-white',
+  'bg-gradient-to-br from-sky-500 to-cyan-500 text-white',
+  'bg-gradient-to-br from-emerald-500 to-teal-500 text-white',
+  'bg-gradient-to-br from-purple-500 to-pink-500 text-white',
+  'bg-gradient-to-br from-amber-500 to-yellow-500 text-white',
 ] as const;
 
 function initials(name: string): string {
@@ -28,30 +29,53 @@ function hash(name: string): number {
   return h;
 }
 
-function recStyle(rec: string): { label: string; className: string } {
+function recStyle(rec: string): { label: string; style: CSSProperties } {
   switch (rec) {
     case 'CONTACT_NOW':
       return {
         label: 'CONTACT NOW',
-        className: 'bg-teal-500 text-teal-950 font-bold',
+        style: {
+          background: 'rgba(52,211,153,0.15)',
+          color: '#34d399',
+          border: '1px solid rgba(52,211,153,0.35)',
+        },
       };
     case 'RESEARCH_MORE':
       return {
         label: 'RESEARCH MORE',
-        className: 'bg-amber-400/90 text-amber-950 font-bold',
+        style: {
+          background: 'rgba(251,191,36,0.12)',
+          color: '#fbbf24',
+          border: '1px solid rgba(251,191,36,0.35)',
+        },
       };
     case 'MONITOR':
       return {
         label: 'MONITOR',
-        className: 'bg-slate-600 text-slate-100 font-semibold',
+        style: {
+          background: 'rgba(59,130,246,0.15)',
+          color: '#93c5fd',
+          border: '1px solid rgba(59,130,246,0.35)',
+        },
       };
     case 'REJECT':
       return {
         label: 'REJECT',
-        className: 'bg-rose-500/80 text-white font-semibold',
+        style: {
+          background: 'rgba(248,113,113,0.12)',
+          color: '#f87171',
+          border: '1px solid rgba(248,113,113,0.3)',
+        },
       };
     default:
-      return { label: rec, className: 'bg-slate-700 text-slate-200' };
+      return {
+        label: rec,
+        style: {
+          background: 'rgba(45,55,72,0.6)',
+          color: '#D1D5DB',
+          border: '1px solid #2d3748',
+        },
+      };
   }
 }
 
@@ -97,69 +121,83 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
         }
       }}
       className={cn(
-        'flex flex-col gap-3.5 rounded-xl border p-4 text-left transition-all cursor-pointer outline-none',
+        'relative flex min-w-0 flex-col rounded-xl border p-4 text-left transition-all cursor-pointer outline-none',
         'focus-visible:ring-2 focus-visible:ring-teal-400/60',
         'bg-[#1A2236] hover:bg-[#1f2940]',
         selected
-          ? 'border-teal-400 shadow-[0_0_0_1px_rgba(45,212,191,0.45)]'
-          : 'border-slate-700/80 hover:border-slate-600',
+          ? 'border-teal-400/70 bg-gradient-to-br from-teal-500/14 to-[#1A2236] shadow-[inset_3px_0_0_#2DD4BF,0_0_0_1px_rgba(45,212,191,0.35),0_0_28px_rgba(20,184,166,0.18)]'
+          : 'border-[#2d3748] hover:border-teal-500/45 hover:shadow-[0_0_0_1px_rgba(20,184,166,0.2),0_12px_28px_rgba(0,0,0,0.35)]',
       )}
     >
-      <div className="flex items-start gap-3">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <span
-            className={cn(
-              'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold',
-              tone,
-            )}
-          >
-            {initials(row.company.name)}
-          </span>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono text-slate-500">#{rank}</span>
-              <span className="truncate text-sm font-semibold text-white">{row.company.name}</span>
-            </div>
-            <div className="truncate text-[11px] text-slate-400">
-              {[row.company.industry, row.company.geography].filter(Boolean).join(' · ') || '—'}
+      {selected && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-teal-400 animate-live-pulse"
+        />
+      )}
+      {/* Stable grid: left content | fixed right slot for Qualify + rec */}
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_88px] items-start gap-3">
+        <div className="flex min-w-0 flex-col gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              className={cn(
+                'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold',
+                tone,
+              )}
+            >
+              {initials(row.company.name)}
+            </span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-semibold text-[#D1D5DB]">#{rank}</span>
+                <span className="truncate text-sm font-semibold text-white">{row.company.name}</span>
+              </div>
+              <div className="truncate text-[11px] text-slate-400">
+                {[row.company.industry, row.company.geography].filter(Boolean).join(' · ') || '—'}
+              </div>
             </div>
           </div>
-        </div>
-        <QualifyScore
-          score={row.qualificationScore}
-          businessFit={row.businessFit}
-          strategicFit={row.strategicFit}
-        />
-      </div>
 
-      <div className="flex items-end justify-between gap-2">
-        <div className="flex gap-3">
-          <MetricRing
-            label="Similarity"
-            value={row.similarityScore}
-            accent="teal"
-            tooltip="How closely this lead matches Ideal DNA across weighted dimensions."
-          />
-          <MetricRing
-            label="Confidence"
-            value={row.confidence}
-            accent="blue"
-            tooltip="Scoring confidence = field completeness of company DNA. Not AI research confidence."
-          />
-          <MetricRing
-            label="Evidence"
-            value={Math.min(100, evidenceCount * 12)}
-            accent="amber"
-            tooltip={`${evidenceCount} evidence row${evidenceCount === 1 ? '' : 's'} from CSV / website research.`}
-          />
+          <div className="flex min-w-0 flex-wrap justify-start gap-2 sm:gap-3">
+            <MetricRing
+              label="Similarity"
+              value={row.similarityScore}
+              accent="teal"
+              tooltip="How closely this lead matches Ideal DNA across weighted dimensions."
+            />
+            <MetricRing
+              label="Confidence"
+              value={row.confidence}
+              accent="blue"
+              tooltip="Scoring confidence = field completeness of company DNA. Not AI research confidence."
+            />
+            <MetricRing
+              label="Evidence"
+              value={Math.min(100, evidenceCount * 12)}
+              accent="amber"
+              tooltip={`${evidenceCount} evidence row${evidenceCount === 1 ? '' : 's'} from CSV / website research.`}
+            />
+          </div>
         </div>
-        <span className={cn('rounded-md px-2 py-1 text-[10px] tracking-wide', rec.className)}>
-          {rec.label}
-        </span>
+
+        {/* Fixed-width right column so MONITOR / RESEARCH MORE share one slot */}
+        <div className="flex w-[88px] flex-col items-center gap-2">
+          <QualifyScore
+            score={row.qualificationScore}
+            businessFit={row.businessFit}
+            strategicFit={row.strategicFit}
+          />
+          <span
+            className="flex h-7 w-full min-w-[88px] shrink-0 items-center justify-center rounded-md px-1 text-center text-[9px] font-bold uppercase leading-tight tracking-[0.04em]"
+            style={rec.style}
+          >
+            {rec.label}
+          </span>
+        </div>
       </div>
 
       {chips.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="mt-3 flex flex-wrap gap-1.5">
           {chips.map((c) => (
             <span
               key={`${c.label}-${c.full}`}
@@ -174,7 +212,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
 
       <div
         className={cn(
-          'flex items-start gap-1.5 text-[11px] leading-snug',
+          'mt-3 flex items-start gap-1.5 text-[11px] leading-snug',
           oneLiner.thin ? 'text-slate-500 italic' : 'text-teal-200/90',
         )}
       >
@@ -182,27 +220,29 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
         <span className="line-clamp-2">{oneLiner.text}</span>
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {hint && (
-          <span
-            title={hint.title}
-            className={cn(
-              'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium',
-              hint.kind === 'no_web'
-                ? 'bg-slate-700/80 text-slate-300'
-                : 'bg-rose-500/15 text-rose-300',
-            )}
-          >
-            <AlertTriangle className="h-3 w-3" />
-            {hint.label}
-          </span>
-        )}
-        {(row.missingInformation?.length ?? 0) > 0 && !hint && (
-          <span className="rounded-md bg-slate-700/60 px-1.5 py-0.5 text-[10px] text-slate-400">
-            AI: missing info ({row.missingInformation.length})
-          </span>
-        )}
-      </div>
+      {(hint || (row.missingInformation?.length ?? 0) > 0) && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {hint && (
+            <span
+              title={hint.title}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium',
+                hint.kind === 'no_web'
+                  ? 'bg-slate-700/80 text-slate-300'
+                  : 'bg-[rgba(248,113,113,0.18)] text-[#f87171]',
+              )}
+            >
+              <AlertTriangle className="h-3 w-3" />
+              {hint.label}
+            </span>
+          )}
+          {(row.missingInformation?.length ?? 0) > 0 && !hint && (
+            <span className="rounded-md bg-slate-700/60 px-1.5 py-0.5 text-[10px] text-slate-400">
+              AI: missing info ({row.missingInformation.length})
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

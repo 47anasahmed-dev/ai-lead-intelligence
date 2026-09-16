@@ -17,6 +17,9 @@ const ACCENT = {
   amber: '#FBBF24',
 } as const;
 
+const QUALIFY_TEAL = '#2DD4BF';
+
+/** Half-arc ring for Similarity / Confidence / Evidence (pre–PR #6 style). */
 export function MetricRing({
   label,
   value,
@@ -36,8 +39,18 @@ export function MetricRing({
 
   return (
     <Tooltip>
-      <TooltipTrigger className="flex flex-col items-center gap-0.5 cursor-default">
-        <svg width={size} height={size / 2 + 8} viewBox={`0 0 ${size} ${size / 2 + 8}`} aria-hidden>
+      <TooltipTrigger
+        delay={200}
+        render={
+          <div className="flex flex-col items-center gap-0.5 cursor-default outline-none" />
+        }
+      >
+        <svg
+          width={size}
+          height={size / 2 + 8}
+          viewBox={`0 0 ${size} ${size / 2 + 8}`}
+          aria-hidden
+        >
           <path
             d={`M ${stroke / 2} ${cy} A ${r} ${r} 0 0 1 ${size - stroke / 2} ${cy}`}
             fill="none"
@@ -65,7 +78,7 @@ export function MetricRing({
             {v == null ? '—' : Math.round(v)}
           </text>
         </svg>
-        <span className="text-[10px] uppercase tracking-wide text-slate-400">{label}</span>
+        <span className="text-[11px] uppercase tracking-wide text-[#9CA3AF]">{label}</span>
       </TooltipTrigger>
       <TooltipContent className="max-w-xs bg-slate-900 text-slate-100">
         {tooltip}
@@ -74,25 +87,83 @@ export function MetricRing({
   );
 }
 
+/** Full-circle Qualify score with fixed teal stroke (not score-band coloring). */
 export function QualifyScore({
   score,
   businessFit,
   strategicFit,
   className,
+  size = 60,
 }: {
   score: number;
   businessFit: number;
   strategicFit: number;
   className?: string;
+  size?: number;
 }) {
+  const v = Math.min(100, Math.max(0, score));
+  const stroke = 5;
+  const r = (size - stroke) / 2 - 1;
+  const cx = size / 2;
+  const cy = size / 2;
+  const circumference = 2 * Math.PI * r;
+  const dash = circumference * (v / 100);
+  const color = QUALIFY_TEAL;
+  const fontSize = size >= 58 ? 16 : 14;
+
   return (
     <Tooltip>
-      <TooltipTrigger className={cn('cursor-default text-left', className)}>
-        <div className="text-[10px] uppercase tracking-wide text-slate-400">Qualify</div>
-        <div className="text-2xl font-bold tabular-nums text-white leading-none">{score}</div>
-        <div className="mt-0.5 text-[10px] text-slate-400">
-          B{businessFit} · S{strategicFit}
+      <TooltipTrigger
+        delay={200}
+        render={
+          <div
+            className={cn(
+              'flex flex-col items-center gap-1.5 cursor-default outline-none leading-none',
+              className,
+            )}
+          />
+        }
+      >
+        <div className="relative shrink-0" style={{ width: size, height: size }}>
+          <svg
+            width={size}
+            height={size}
+            viewBox={`0 0 ${size} ${size}`}
+            aria-hidden
+            className="-rotate-90"
+          >
+            <circle
+              cx={cx}
+              cy={cy}
+              r={r}
+              fill="none"
+              stroke="#121826"
+              strokeWidth={stroke}
+            />
+            <circle
+              cx={cx}
+              cy={cy}
+              r={r}
+              fill="none"
+              stroke={color}
+              strokeWidth={stroke}
+              strokeLinecap="round"
+              strokeDasharray={`${dash} ${circumference}`}
+            />
+          </svg>
+          <span
+            className="absolute inset-0 grid place-items-center font-bold tabular-nums leading-none"
+            style={{ fontSize, color }}
+          >
+            {Math.round(v)}
+          </span>
         </div>
+        <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-[#9CA3AF]">
+          Qualify
+        </span>
+        <span className="text-[11px] tabular-nums text-[#D1D5DB]">
+          B{businessFit} · S{strategicFit}
+        </span>
       </TooltipTrigger>
       <TooltipContent className="max-w-xs bg-slate-900 text-slate-100">
         Qualification = 60% business fit ({businessFit}) + 40% strategic fit ({strategicFit}).

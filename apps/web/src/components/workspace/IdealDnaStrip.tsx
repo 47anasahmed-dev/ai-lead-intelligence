@@ -45,7 +45,7 @@ export function IdealDnaStrip({ idealDna, idealDnaSummary, thresholds, status }:
         }
       }}
       className={cn(
-        'border-b border-slate-700/60 bg-gradient-to-r from-teal-500/[0.08] to-transparent px-5 py-3.5 outline-none',
+        'min-w-0 overflow-x-hidden border-b border-slate-700/60 bg-gradient-to-r from-teal-500/[0.08] to-transparent px-3 py-3.5 outline-none sm:px-5',
         canToggle && 'cursor-pointer hover:from-teal-500/[0.11]',
         'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-400/50',
       )}
@@ -79,7 +79,7 @@ export function IdealDnaStrip({ idealDna, idealDnaSummary, thresholds, status }:
           </span>
         )}
 
-        <span className="ml-auto shrink-0 rounded-full border border-slate-600/80 bg-slate-800/50 px-2.5 py-0.5 text-[10px] text-slate-400">
+        <span className="ml-auto shrink-0 rounded-full border border-slate-600/80 bg-slate-800/50 px-2.5 py-0.5 text-[11px] text-slate-300">
           {thresholdChipsLabel(thresholds)}
         </span>
 
