@@ -233,8 +233,8 @@ function LeadPanel({
               <p className="mt-0.5 truncate text-xs text-slate-400">
                 {[row.company.industry, row.company.geography].filter(Boolean).join(' · ') || '—'}
               </p>
-              <div className="mt-1.5 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-teal-400">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-teal-400 shadow-[0_0_0_3px_rgba(45,212,191,0.25)]" />
+              <div className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-teal-400">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-teal-400 animate-live-pulse" />
                 Live selection
               </div>
             </div>
@@ -243,7 +243,7 @@ function LeadPanel({
             type="button"
             onClick={onRefresh}
             disabled={refreshBusy}
-            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-600 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-700 disabled:opacity-50"
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-600 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-700 disabled:opacity-50"
             title="Refresh website evidence"
           >
             {refreshBusy ? (
@@ -378,7 +378,7 @@ function ReferencePanel({
             type="button"
             onClick={onRefresh}
             disabled={refreshBusy}
-            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-600 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-700 disabled:opacity-50"
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-600 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-700 disabled:opacity-50"
           >
             {refreshBusy ? (
               <Loader2 className="h-3 w-3 animate-spin" />

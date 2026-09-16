@@ -101,7 +101,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
         }
       }}
       className={cn(
-        'flex flex-col gap-3.5 rounded-xl border p-4 text-left transition-all cursor-pointer outline-none',
+        'relative flex flex-col gap-2 rounded-xl border p-4 text-left transition-all cursor-pointer outline-none',
         'focus-visible:ring-2 focus-visible:ring-teal-400/60',
         'bg-[#1A2236] hover:bg-[#1f2940]',
         selected
@@ -109,6 +109,12 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
           : 'border-slate-700/80 hover:border-teal-500/45 hover:shadow-[0_0_0_1px_rgba(20,184,166,0.2),0_12px_28px_rgba(0,0,0,0.35)]',
       )}
     >
+      {selected && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-teal-400 animate-live-pulse"
+        />
+      )}
       <div className="flex items-start gap-3">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <span

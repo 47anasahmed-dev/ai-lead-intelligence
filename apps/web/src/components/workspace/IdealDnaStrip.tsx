@@ -79,7 +79,7 @@ export function IdealDnaStrip({ idealDna, idealDnaSummary, thresholds, status }:
           </span>
         )}
 
-        <span className="ml-auto shrink-0 rounded-full border border-slate-600/80 bg-slate-800/50 px-2.5 py-0.5 text-[10px] text-slate-400">
+        <span className="ml-auto shrink-0 rounded-full border border-slate-600/80 bg-slate-800/50 px-2.5 py-0.5 text-[11px] text-slate-300">
           {thresholdChipsLabel(thresholds)}
         </span>
 
