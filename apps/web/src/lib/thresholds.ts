@@ -52,7 +52,7 @@ function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
-/** Heuristic “AI suggest” from current result distribution (MVP). */
+/** Heuristic “AI suggest” from current result distribution (fallback when API/AI unavailable). */
 export function suggestThresholdsFromResults(
   rows: Array<{
     qualificationScore: number;

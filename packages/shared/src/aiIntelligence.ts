@@ -187,3 +187,120 @@ export const IDEAL_DNA_SUMMARY_JSON_SCHEMA = {
   },
   required: ['idealDnaSummary', 'thin'],
 } as const;
+
+/** Structured schema for ranking-threshold AI suggest. */
+export const THRESHOLD_SUGGEST_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    minQualification: { type: 'number' },
+    minSimilarity: { type: 'number' },
+    minEvidenceCount: { type: 'number' },
+    rationale: { type: 'string' },
+  },
+  required: [
+    'minQualification',
+    'minSimilarity',
+    'minEvidenceCount',
+    'rationale',
+  ],
+} as const;
+
+export type ThresholdSuggestSource = 'ai' | 'heuristic';
+
+/** Ranking floors returned by POST /searches/:id/suggest-thresholds */
+export interface ThresholdSuggestResult {
+  minQualification: number;
+  minSimilarity: number;
+  minEvidenceCount: number;
+  rationale: string;
+  source: ThresholdSuggestSource;
+  /** Optional note when falling back to heuristic (noop / timeout / error) */
+  message?: string;
+}
+
+export type ScoreEvidenceRow = {
+  qualificationScore: number;
+  similarityScore: number | null;
+  evidenceCount: number;
+};
+
+function clampInt(n: number, min: number, max: number): number {
+  if (Number.isNaN(n)) return min;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+/**
+ * Local 25th-percentile heuristic for ranking floors.
+ * Shared by API (AI fallback) and web (offline / no-search fallback).
+ */
+export function heuristicSuggestThresholds(
+  rows: ScoreEvidenceRow[],
+  defaults: {
+    minQualification: number;
+    minSimilarity: number;
+    minEvidenceCount: number;
+  } = { minQualification: 55, minSimilarity: 60, minEvidenceCount: 2 },
+): Omit<ThresholdSuggestResult, 'source' | 'message'> {
+  if (rows.length === 0) {
+    return {
+      ...defaults,
+      rationale:
+        'No scored results yet — using system defaults so the ranked list stays usable once results arrive.',
+    };
+  }
+  const quals = rows.map((r) => r.qualificationScore).sort((a, b) => a - b);
+  const sims = rows
+    .map((r) => r.similarityScore)
+    .filter((v): v is number => v != null)
+    .sort((a, b) => a - b);
+  const evCounts = rows.map((r) => r.evidenceCount).sort((a, b) => a - b);
+  const p25 = (arr: number[]) =>
+    arr.length ? arr[Math.floor((arr.length - 1) * 0.25)]! : 0;
+
+  return {
+    minQualification: clampInt(p25(quals), 0, 100),
+    minSimilarity: clampInt(
+      sims.length ? p25(sims) : defaults.minSimilarity,
+      0,
+      100,
+    ),
+    minEvidenceCount: clampInt(
+      evCounts.length
+        ? Math.max(1, p25(evCounts))
+        : defaults.minEvidenceCount,
+      0,
+      50,
+    ),
+    rationale:
+      'Local 25th-percentile floors from the current score/evidence distribution so roughly the stronger three-quarters of leads remain visible.',
+  };
+}
+
+export function clampThresholdSuggest(raw: {
+  minQualification?: unknown;
+  minSimilarity?: unknown;
+  minEvidenceCount?: unknown;
+  rationale?: unknown;
+}): Omit<ThresholdSuggestResult, 'source' | 'message'> | null {
+  const minQualification = Number(raw.minQualification);
+  const minSimilarity = Number(raw.minSimilarity);
+  const minEvidenceCount = Number(raw.minEvidenceCount);
+  if (
+    Number.isNaN(minQualification) ||
+    Number.isNaN(minSimilarity) ||
+    Number.isNaN(minEvidenceCount)
+  ) {
+    return null;
+  }
+  const rationale =
+    typeof raw.rationale === 'string' && raw.rationale.trim()
+      ? raw.rationale.trim().slice(0, 600)
+      : 'AI suggested floors from the score/evidence distribution.';
+  return {
+    minQualification: clampInt(minQualification, 0, 100),
+    minSimilarity: clampInt(minSimilarity, 0, 100),
+    minEvidenceCount: clampInt(minEvidenceCount, 0, 50),
+    rationale,
+  };
+}

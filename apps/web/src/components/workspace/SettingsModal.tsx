@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, Sparkles, RotateCcw } from 'lucide-react';
+import { X, Sparkles, RotateCcw, Loader2 } from 'lucide-react';
 import {
   DEFAULT_THRESHOLDS,
   type RankingThresholds,
   suggestThresholdsFromResults,
 } from '@/lib/thresholds';
-import type { ResultRow } from '@/lib/api';
+import { client, type ResultRow } from '@/lib/api';
 
 type Props = {
   open: boolean;
@@ -15,13 +15,27 @@ type Props = {
   value: RankingThresholds;
   onChange: (next: RankingThresholds) => void;
   results: ResultRow[];
+  /** When set, AI suggest calls the OpenRouter-backed API; otherwise local heuristic. */
+  searchId?: string | null;
 };
 
-export function SettingsModal({ open, onClose, value, onChange, results }: Props) {
+export function SettingsModal({
+  open,
+  onClose,
+  value,
+  onChange,
+  results,
+  searchId = null,
+}: Props) {
   const [draft, setDraft] = useState(value);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestNote, setSuggestNote] = useState<string | null>(null);
 
   useEffect(() => {
-    if (open) setDraft(value);
+    if (open) {
+      setDraft(value);
+      setSuggestNote(null);
+    }
   }, [open, value]);
 
   if (!open) return null;
@@ -29,6 +43,40 @@ export function SettingsModal({ open, onClose, value, onChange, results }: Props
   function apply() {
     onChange(draft);
     onClose();
+  }
+
+  function applyLocalHeuristic(note: string) {
+    setDraft(suggestThresholdsFromResults(results));
+    setSuggestNote(note);
+  }
+
+  async function onAiSuggest() {
+    if (!searchId) {
+      applyLocalHeuristic('Local heuristic (no active search).');
+      return;
+    }
+    setSuggesting(true);
+    setSuggestNote(null);
+    try {
+      const res = await client.suggestThresholds(searchId);
+      const d = res.data;
+      setDraft({
+        minQualification: d.minQualification,
+        minSimilarity: d.minSimilarity,
+        minEvidenceCount: d.minEvidenceCount,
+      });
+      const bits = [d.rationale?.trim()].filter(Boolean) as string[];
+      if (d.source === 'heuristic') {
+        bits.push(d.message?.trim() || 'Local heuristic fallback.');
+      } else if (d.message?.trim()) {
+        bits.push(d.message.trim());
+      }
+      setSuggestNote(bits.join(' ') || (d.source === 'ai' ? 'AI suggest applied.' : 'Local heuristic.'));
+    } catch {
+      applyLocalHeuristic('API error — local heuristic applied.');
+    } finally {
+      setSuggesting(false);
+    }
   }
 
   return (
@@ -86,16 +134,24 @@ export function SettingsModal({ open, onClose, value, onChange, results }: Props
         <div className="mt-5 flex flex-wrap gap-2">
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-teal-500/40 bg-teal-500/10 px-3 py-1.5 text-xs font-medium text-teal-300 hover:bg-teal-500/20"
-            onClick={() => setDraft(suggestThresholdsFromResults(results))}
+            disabled={suggesting}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-teal-500/40 bg-teal-500/10 px-3 py-1.5 text-xs font-medium text-teal-300 hover:bg-teal-500/20 disabled:opacity-60"
+            onClick={() => void onAiSuggest()}
           >
-            <Sparkles className="h-3.5 w-3.5" />
-            AI suggest
+            {suggesting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5" />
+            )}
+            {suggesting ? 'Suggesting…' : 'AI suggest'}
           </button>
           <button
             type="button"
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700"
-            onClick={() => setDraft({ ...DEFAULT_THRESHOLDS })}
+            onClick={() => {
+              setDraft({ ...DEFAULT_THRESHOLDS });
+              setSuggestNote(null);
+            }}
           >
             <RotateCcw className="h-3.5 w-3.5" />
             System defaults
@@ -117,6 +173,10 @@ export function SettingsModal({ open, onClose, value, onChange, results }: Props
             </button>
           </div>
         </div>
+
+        {suggestNote ? (
+          <p className="mt-3 text-[11px] leading-relaxed text-slate-500">{suggestNote}</p>
+        ) : null}
       </div>
     </div>
   );

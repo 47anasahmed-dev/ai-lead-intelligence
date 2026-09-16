@@ -359,6 +359,7 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
         value={thresholds}
         onChange={onThresholdsChange}
         results={results}
+        searchId={searchId}
       />
     </div>
   );
