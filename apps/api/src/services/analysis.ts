@@ -22,7 +22,10 @@ import {
 } from './ai/intelligence.js';
 import { companyToDna } from './companyMapper.js';
 import { loadDnasForCompanies } from './research/batchEnrich.js';
-import { enrichCompanies } from './research/enrichCompany.js';
+import { enrichCompanies, enrichCompaniesDeep } from './research/enrichCompany.js';
+
+const DEEP_ENRICH_TOP_K = 5;
+const DEEP_ENRICH_TIMEOUT_MS = 120_000;
 
 export interface RankedResult {
   companyId: string;
@@ -186,6 +189,95 @@ async function runAiIntelligenceLayer(
   return nextIdeal;
 }
 
+
+/**
+ * After status=completed: deep multi-source research for top-K=5 by qualification rank.
+ * Does not hang Running — caller invokes only after completed stamp.
+ */
+async function runDeepEnrichTopK(
+  searchId: string,
+  idealDna: CompanyDna,
+  ranked: RankedResult[],
+  dnaById: Map<string, CompanyDna>,
+  allCompanies: Awaited<ReturnType<typeof prisma.company.findMany>>,
+  excludeIds: Set<string>,
+): Promise<void> {
+  if (!isLiveAiEnabled()) return;
+  const ai = createServerAiProvider();
+  if (ai.name === 'noop') return;
+
+  const top = ranked.slice(0, DEEP_ENRICH_TOP_K);
+  if (!top.length) return;
+
+  const companyById = new Map(
+    allCompanies.map((c: import('@prisma/client').Company) => [c.id, c]),
+  );
+
+  const items = top
+    .map((row) => {
+      const dna = dnaById.get(row.companyId);
+      const company = companyById.get(row.companyId);
+      if (!dna || !company) return null;
+      return {
+        dna,
+        linkedinUrl: company.linkedinUrl ?? null,
+        companyName: company.name,
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x != null);
+
+  if (!items.length) return;
+
+  const run = async (): Promise<void> => {
+    const enrichedMap = await enrichCompaniesDeep(items, ai, { persist: true });
+    for (const [companyId, enrichedDna] of enrichedMap) {
+      if (excludeIds.has(companyId)) continue;
+      let similarity = similarityScore(idealDna, enrichedDna);
+      const qualification = qualificationScore(idealDna, enrichedDna, similarity);
+      similarity = await maybeAttachFitNarrative(
+        ai,
+        idealDna,
+        enrichedDna,
+        similarity,
+        qualification,
+      );
+      await upsertScoreRows(searchId, enrichedDna, similarity, qualification);
+      const row = ranked.find((r) => r.companyId === companyId);
+      if (row) {
+        row.similarity = similarity;
+        row.qualification = qualification;
+      }
+      dnaById.set(companyId, enrichedDna);
+    }
+    ranked.sort((a, b) => {
+      const q =
+        b.qualification.qualificationScore - a.qualification.qualificationScore;
+      if (q !== 0) return q;
+      return b.similarity.overallScore - a.similarity.overallScore;
+    });
+  };
+
+  try {
+    await Promise.race([
+      run(),
+      new Promise<never>((_, reject) => {
+        setTimeout(
+          () =>
+            reject(
+              new Error(`Deep enrich top-${DEEP_ENRICH_TOP_K} timeout after ${DEEP_ENRICH_TIMEOUT_MS}ms`),
+            ),
+          DEEP_ENRICH_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } catch (err) {
+    console.warn(
+      '[ai] deep enrich top-K failed or timed out; keeping prior DNA/scores',
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
 async function scoreAndPersist(
   searchId: string,
   idealDna: CompanyDna,
@@ -336,6 +428,16 @@ async function scoreAndPersist(
     ranked,
     dnaById,
     options,
+  );
+
+  // 4) Deep multi-source enrich for top-5 (qualification rank) — after Completed
+  await runDeepEnrichTopK(
+    searchId,
+    idealWithAi,
+    ranked,
+    dnaById,
+    allCompanies,
+    excludeIds,
   );
 
   return {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, PanelLeft, Play, Settings } from 'lucide-react';
 import {
@@ -14,6 +14,7 @@ import {
   loadThresholds,
   passesThresholds,
   saveThresholds,
+  suggestThresholdsFromResults,
   type RankingThresholds,
 } from '@/lib/thresholds';
 import { LeftRail } from './LeftRail';
@@ -49,6 +50,10 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialLoading, setInitialLoading] = useState(Boolean(initialSearchId));
+
+  /** SearchIds that already got auto (or manual) thresholds — avoid poll overwrite. */
+  const autoThresholdAppliedRef = useRef<Set<string>>(new Set());
+  const autoThresholdInFlightRef = useRef<Set<string>>(new Set());
 
   // hydrate thresholds from localStorage
   useEffect(() => {
@@ -137,6 +142,54 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
     return () => clearInterval(id);
   }, [searchId, shouldPoll, fetchLive]);
 
+  // Auto AI thresholds once per searchId when status → completed (Create & Run → top ~5).
+  // Does not block progressive results while Running.
+  useEffect(() => {
+    if (!searchId || status !== 'completed') return;
+    if (autoThresholdAppliedRef.current.has(searchId)) return;
+    if (autoThresholdInFlightRef.current.has(searchId)) return;
+    if (results.length === 0) return;
+
+    const id = searchId;
+    const snapshot = results;
+    autoThresholdInFlightRef.current.add(id);
+
+    let cancelled = false;
+    (async () => {
+      try {
+        let next: RankingThresholds;
+        try {
+          if (typeof client.suggestThresholds === 'function') {
+            const res = await client.suggestThresholds(id);
+            next = {
+              minQualification: res.data.minQualification,
+              minSimilarity: res.data.minSimilarity,
+              minEvidenceCount: res.data.minEvidenceCount,
+            };
+          } else {
+            next = suggestThresholdsFromResults(snapshot);
+          }
+        } catch {
+          next = suggestThresholdsFromResults(snapshot);
+        }
+        if (cancelled) return;
+        // Manual Settings save while in-flight marks the set — do not overwrite.
+        if (autoThresholdAppliedRef.current.has(id)) return;
+        autoThresholdAppliedRef.current.add(id);
+        setThresholds(next);
+        saveThresholds(next);
+        setSelection(null);
+        setDetailOpen(false);
+      } finally {
+        autoThresholdInFlightRef.current.delete(id);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchId, status, results]);
+
   // Auto-select first ranked lead when results arrive and nothing selected
   const ranked = useMemo(
     () => results.filter((row) => passesThresholds(row, thresholds) && !row.hardExclusion),
@@ -208,6 +261,8 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
   function onThresholdsChange(next: RankingThresholds) {
     setThresholds(next);
     saveThresholds(next);
+    // Treat manual Settings edits as applied for this search so polls never overwrite.
+    if (searchId) autoThresholdAppliedRef.current.add(searchId);
     setSelection(null);
     setDetailOpen(false);
   }

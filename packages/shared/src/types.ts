@@ -6,7 +6,7 @@ export type Recommendation =
   | 'MONITOR'
   | 'REJECT';
 
-export type EvidenceSource = 'csv' | 'criteria' | 'website';
+export type EvidenceSource = 'csv' | 'criteria' | 'website' | 'linkedin' | 'about' | 'news' | 'mention';
 
 export interface EvidenceItem {
   field: string;

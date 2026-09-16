@@ -6,3 +6,4 @@ export * from './qualification.js';
 export * from './filter.js';
 export * from './aiProvider.js';
 export * from './aiIntelligence.js';
+export * from './mergeDna.js';

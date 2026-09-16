@@ -100,7 +100,8 @@ export function SettingsModal({
             </h2>
             <p className="mt-1 text-xs text-slate-400">
               Leads must pass <strong className="text-slate-300">all</strong> floors (AND) to appear
-              in ranked list and tallies. Stored in this browser.
+              in ranked list and tallies. Stored in this browser. On Run, floors auto-suggest once
+              per search so ~top 5 show without opening Settings — Save here still wins for that search.
             </p>
           </div>
           <button
