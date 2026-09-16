@@ -121,7 +121,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
         }
       }}
       className={cn(
-        'relative flex flex-col rounded-xl border p-4 text-left transition-all cursor-pointer outline-none',
+        'relative flex min-w-0 flex-col rounded-xl border p-4 text-left transition-all cursor-pointer outline-none',
         'focus-visible:ring-2 focus-visible:ring-teal-400/60',
         'bg-[#1A2236] hover:bg-[#1f2940]',
         selected
@@ -135,10 +135,10 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
           className="pointer-events-none absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-teal-400 animate-live-pulse"
         />
       )}
-      {/* Left: name + rings; right: Qualify then rec — never share one cell */}
-      <div className="flex items-start gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
-          <div className="flex items-center gap-2 min-w-0">
+      {/* Stable grid: left content | fixed right slot for Qualify + rec */}
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_88px] items-start gap-3">
+        <div className="flex min-w-0 flex-col gap-3">
+          <div className="flex min-w-0 items-center gap-2">
             <span
               className={cn(
                 'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold',
@@ -158,7 +158,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
             </div>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex min-w-0 flex-wrap justify-start gap-2 sm:gap-3">
             <MetricRing
               label="Similarity"
               value={row.similarityScore}
@@ -179,14 +179,16 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
             />
           </div>
         </div>
-        <div className="flex shrink-0 flex-col items-center gap-2">
+
+        {/* Fixed-width right column so MONITOR / RESEARCH MORE share one slot */}
+        <div className="flex w-[88px] flex-col items-center gap-2">
           <QualifyScore
             score={row.qualificationScore}
             businessFit={row.businessFit}
             strategicFit={row.strategicFit}
           />
           <span
-            className="rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.04em] shrink-0"
+            className="flex h-7 w-full min-w-[88px] shrink-0 items-center justify-center rounded-md px-1 text-center text-[9px] font-bold uppercase leading-tight tracking-[0.04em]"
             style={rec.style}
           >
             {rec.label}

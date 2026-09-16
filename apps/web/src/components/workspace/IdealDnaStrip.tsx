@@ -45,7 +45,7 @@ export function IdealDnaStrip({ idealDna, idealDnaSummary, thresholds, status }:
         }
       }}
       className={cn(
-        'border-b border-slate-700/60 bg-gradient-to-r from-teal-500/[0.08] to-transparent px-5 py-3.5 outline-none',
+        'min-w-0 overflow-x-hidden border-b border-slate-700/60 bg-gradient-to-r from-teal-500/[0.08] to-transparent px-3 py-3.5 outline-none sm:px-5',
         canToggle && 'cursor-pointer hover:from-teal-500/[0.11]',
         'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-400/50',
       )}

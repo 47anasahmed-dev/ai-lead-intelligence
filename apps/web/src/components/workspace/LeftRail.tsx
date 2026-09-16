@@ -39,6 +39,8 @@ type Props = {
   activeSearchId: string | null;
   onLoadSearch: (id: string) => void;
   sessionLabel: string;
+  className?: string;
+  onRequestClose?: () => void;
 };
 
 export function LeftRail({
@@ -50,6 +52,8 @@ export function LeftRail({
   activeSearchId,
   onLoadSearch,
   sessionLabel,
+  className,
+  onRequestClose,
 }: Props) {
   const [adding, setAdding] = useState(false);
   const [q, setQ] = useState('');
@@ -99,14 +103,31 @@ export function LeftRail({
   }
 
   return (
-    <aside className="flex h-full flex-col border-r border-slate-700/60 bg-[#1A2236] overflow-hidden">
+    <aside
+      className={cn(
+        'flex h-full flex-col border-r border-slate-700/60 bg-[#1A2236] overflow-hidden',
+        className,
+      )}
+    >
       <div className="flex-1 overflow-y-auto">
         <section className="border-b border-slate-700/60 p-3.5">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <h2 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
               Reference companies
             </h2>
-            <span className="text-[10px] text-slate-500">{references.length}/5</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-slate-500">{references.length}/5</span>
+              {onRequestClose && (
+                <button
+                  type="button"
+                  onClick={onRequestClose}
+                  className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white lg:hidden"
+                  aria-label="Close references"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="mt-2.5 space-y-2">

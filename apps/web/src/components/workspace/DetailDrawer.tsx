@@ -6,10 +6,11 @@ import { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   ExternalLink,
+  HelpCircle,
   Loader2,
   RefreshCw,
   Sparkles,
-  HelpCircle,
+  X,
 } from 'lucide-react';
 import {
   client,
@@ -39,9 +40,11 @@ export type DrawerSelection =
 type Props = {
   selection: DrawerSelection;
   searchId: string | null;
+  /** When set, shows a close control (mobile/tablet overlay). */
+  onClose?: () => void;
 };
 
-export function DetailDrawer({ selection, searchId }: Props) {
+export function DetailDrawer({ selection, searchId, onClose }: Props) {
   const [detail, setDetail] = useState<CompanyDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshBusy, setRefreshBusy] = useState(false);
@@ -115,6 +118,7 @@ export function DetailDrawer({ selection, searchId }: Props) {
   if (!selection) {
     return (
       <aside className="flex h-full w-full min-w-0 flex-col border-l border-[#2d3748] bg-[#232B3E]">
+        {onClose && <DrawerCloseBar onClose={onClose} />}
         <EmptyState />
       </aside>
     );
@@ -128,6 +132,7 @@ export function DetailDrawer({ selection, searchId }: Props) {
           liveFeed && 'shadow-[inset_3px_0_0_#2DD4BF]',
         )}
       >
+        {onClose && <DrawerCloseBar onClose={onClose} />}
         <LeadPanel
           row={selection.row}
           detail={detail}
@@ -149,6 +154,7 @@ export function DetailDrawer({ selection, searchId }: Props) {
         liveFeed && 'shadow-[inset_3px_0_0_#2DD4BF]',
       )}
     >
+      {onClose && <DrawerCloseBar onClose={onClose} />}
       <ReferencePanel
         company={selection.company}
         detail={detail}
@@ -159,6 +165,24 @@ export function DetailDrawer({ selection, searchId }: Props) {
         onRefresh={() => void onRefresh()}
       />
     </aside>
+  );
+}
+
+function DrawerCloseBar({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="flex shrink-0 items-center justify-between border-b border-[#2d3748] px-3 py-2 lg:hidden">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+        Details
+      </span>
+      <button
+        type="button"
+        onClick={onClose}
+        className="rounded-md border border-[#2d3748] p-1.5 text-[#D1D5DB] hover:bg-[#1A2236]"
+        aria-label="Close details"
+      >
+        <X className="h-4 w-4" />
+      </button>
+    </div>
   );
 }
 

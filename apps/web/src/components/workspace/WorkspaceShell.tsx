@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Play, Settings } from 'lucide-react';
+import { Loader2, PanelLeft, Play, Settings } from 'lucide-react';
 import {
   client,
   type CompanyDnaPayload,
@@ -42,6 +42,9 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
   const [selection, setSelection] = useState<DrawerSelection>(null);
   const [thresholds, setThresholds] = useState<RankingThresholds>(DEFAULT_CLIENT);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [refsOpen, setRefsOpen] = useState(false);
+  /** Below lg: overlay detail only when user opens it (auto-select still highlights cards). */
+  const [detailOpen, setDetailOpen] = useState(false);
   const [pageSize, setPageSize] = useState<PageSize>(4);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -166,6 +169,7 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
     setRunning(true);
     setError(null);
     setSelection(null);
+    setDetailOpen(false);
     try {
       const created = await client.createSearch(references.map((r) => r.id));
       const id = created.data.id;
@@ -188,6 +192,7 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
   async function onLoadSearch(id: string) {
     setError(null);
     setSelection(null);
+    setDetailOpen(false);
     setSearchId(id);
     setInitialLoading(true);
     router.replace(`/?searchId=${id}`, { scroll: false });
@@ -204,6 +209,22 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
     setThresholds(next);
     saveThresholds(next);
     setSelection(null);
+    setDetailOpen(false);
+  }
+
+  function openLead(row: ResultRow) {
+    setSelection({ mode: 'lead', row });
+    setDetailOpen(true);
+  }
+
+  function openReference(c: SearchRefCompany) {
+    setSelection({ mode: 'reference', company: c });
+    setDetailOpen(true);
+    setRefsOpen(false);
+  }
+
+  function closeDetail() {
+    setDetailOpen(false);
   }
 
   const selectedLeadId = selection?.mode === 'lead' ? selection.row.companyId : null;
@@ -217,19 +238,28 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
   ].join(' · ');
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#121826] text-slate-100">
+    <div className="flex h-screen flex-col overflow-x-hidden overflow-hidden bg-[#121826] text-slate-100">
       {/* Top bar */}
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-slate-700/80 bg-gradient-to-b from-[#1A1F2E] to-[#0A0F1C] px-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-teal-400 to-sky-500 text-[11px] font-extrabold text-teal-950">
+      <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-slate-700/80 bg-gradient-to-b from-[#1A1F2E] to-[#0A0F1C] px-3 sm:px-4">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600 px-2 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white lg:hidden"
+            onClick={() => setRefsOpen(true)}
+            aria-label="Open references"
+          >
+            <PanelLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Refs</span>
+          </button>
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-400 to-sky-500 text-[11px] font-extrabold text-teal-950">
             LI
           </div>
-          <div>
-            <div className="text-sm font-bold tracking-tight text-white">Lead Intelligence</div>
-            <div className="text-[10px] text-slate-500 -mt-0.5">AI-powered lead qualification</div>
+          <div className="min-w-0">
+            <div className="truncate text-sm font-bold tracking-tight text-white">Lead Intelligence</div>
+            <div className="hidden text-[10px] text-slate-500 -mt-0.5 sm:block">AI-powered lead qualification</div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
@@ -244,7 +274,7 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
             disabled={references.length < 1 || running}
             onClick={() => void onRun()}
             className={cn(
-              'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold transition-all',
+              'inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-bold transition-all sm:gap-2 sm:px-4',
               'bg-gradient-to-br from-teal-400 to-teal-600 text-teal-950',
               'shadow-[0_0_0_1px_rgba(45,212,191,0.3),0_4px_14px_rgba(13,148,136,0.35)]',
               'hover:brightness-110 disabled:opacity-40 disabled:hover:brightness-100',
@@ -260,22 +290,24 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
         </div>
       </header>
 
-      {/* Workspace grid */}
-      <div className="grid min-h-0 flex-1 grid-cols-[220px_1fr_360px]">
-        <LeftRail
-          references={references}
-          onReferencesChange={(refs) => {
-            setReferences(refs);
-          }}
-          onSelectReference={(c) => setSelection({ mode: 'reference', company: c })}
-          selectedRefId={selectedRefId}
-          recent={recent}
-          activeSearchId={searchId}
-          onLoadSearch={(id) => void onLoadSearch(id)}
-          sessionLabel={sessionLabel}
-        />
+      {/* Workspace grid: 1-col below lg; 3-pane on lg+ */}
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 overflow-x-hidden lg:grid-cols-[220px_minmax(0,1fr)_360px]">
+        <div className="hidden min-h-0 min-w-0 lg:block">
+          <LeftRail
+            references={references}
+            onReferencesChange={(refs) => {
+              setReferences(refs);
+            }}
+            onSelectReference={openReference}
+            selectedRefId={selectedRefId}
+            recent={recent}
+            activeSearchId={searchId}
+            onLoadSearch={(id) => void onLoadSearch(id)}
+            sessionLabel={sessionLabel}
+          />
+        </div>
 
-        <main className="flex min-h-0 flex-col overflow-hidden bg-[#121826]">
+        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-[#121826]">
           <IdealDnaStrip
             idealDna={idealDna}
             idealDnaSummary={idealDnaSummary}
@@ -283,8 +315,8 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
             status={status}
           />
 
-          <div className="flex items-center justify-between gap-3 border-b border-slate-700/40 px-5 py-2.5">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-700/40 px-3 py-2.5 sm:px-5">
+            <div className="min-w-0 text-xs font-semibold uppercase tracking-wide text-slate-300">
               Ranked leads · {visible.length} of {ranked.length}
               {totalCount > ranked.length ? (
                 <span className="ml-1 font-normal text-slate-600">
@@ -316,12 +348,12 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
           </div>
 
           {error && (
-            <div className="mx-4 mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+            <div className="mx-3 mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 sm:mx-4">
               {error}
             </div>
           )}
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-3 sm:p-5">
             {initialLoading ? (
               <div className="flex flex-col items-center justify-center py-20 text-slate-500">
                 <Loader2 className="h-8 w-8 animate-spin text-teal-400" />
@@ -335,14 +367,14 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
                 rankedZero={ranked.length === 0 && results.length > 0}
               />
             ) : (
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
                 {visible.map((row, i) => (
                   <LeadCard
                     key={row.companyId}
                     row={row}
                     rank={i + 1}
                     selected={selectedLeadId === row.companyId}
-                    onSelect={() => setSelection({ mode: 'lead', row })}
+                    onSelect={() => openLead(row)}
                   />
                 ))}
               </div>
@@ -350,8 +382,55 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
           </div>
         </main>
 
-        <DetailDrawer selection={selection} searchId={searchId} />
+        <div className="hidden min-h-0 min-w-0 lg:block">
+          <DetailDrawer selection={selection} searchId={searchId} />
+        </div>
       </div>
+
+      {/* Tablet/mobile: refs slide-over */}
+      {refsOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="References">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/55"
+            aria-label="Dismiss references"
+            onClick={() => setRefsOpen(false)}
+          />
+          <div className="absolute inset-y-0 left-0 flex w-[min(280px,90vw)] flex-col shadow-2xl">
+            <LeftRail
+              references={references}
+              onReferencesChange={(refs) => {
+                setReferences(refs);
+              }}
+              onSelectReference={openReference}
+              selectedRefId={selectedRefId}
+              recent={recent}
+              activeSearchId={searchId}
+              onLoadSearch={(id) => {
+                setRefsOpen(false);
+                void onLoadSearch(id);
+              }}
+              sessionLabel={sessionLabel}
+              onRequestClose={() => setRefsOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Tablet/mobile: detail overlay (opens on explicit card/ref select) */}
+      {detailOpen && selection && (
+        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Lead details">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/55"
+            aria-label="Dismiss details"
+            onClick={closeDetail}
+          />
+          <div className="absolute inset-y-0 right-0 flex w-[min(360px,100%)] flex-col shadow-2xl">
+            <DetailDrawer selection={selection} searchId={searchId} onClose={closeDetail} />
+          </div>
+        </div>
+      )}
 
       <SettingsModal
         open={settingsOpen}
