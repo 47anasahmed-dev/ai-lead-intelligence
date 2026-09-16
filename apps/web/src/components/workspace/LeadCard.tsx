@@ -3,7 +3,7 @@
 import { AlertTriangle, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ResultRow } from '@/lib/api';
-import { companyDnaChips, aiRiskHint, leadAiOneLiner } from '@/lib/aiSurfaces';
+import { companyDnaChips, compactDnaChips, aiRiskHint, leadAiOneLiner } from '@/lib/aiSurfaces';
 import { MetricRing, QualifyScore } from './MetricRing';
 
 const AVATAR = [
@@ -64,7 +64,11 @@ type Props = {
 
 export function LeadCard({ row, rank, selected, onSelect }: Props) {
   const tone = AVATAR[hash(row.company.name) % AVATAR.length];
-  const chips = companyDnaChips(row.company);
+  const chips = compactDnaChips(companyDnaChips(row.company), {
+    maxChips: 5,
+    maxLen: 28,
+    maxSegments: 1,
+  });
   const risksForHint = [
     ...(row.risks ?? []),
     ...((row.redFlags ?? []).map((f) => `AI red flag: ${f}`)),
@@ -93,7 +97,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
         }
       }}
       className={cn(
-        'flex flex-col gap-3 rounded-xl border p-3.5 text-left transition-all cursor-pointer outline-none',
+        'flex flex-col gap-3.5 rounded-xl border p-4 text-left transition-all cursor-pointer outline-none',
         'focus-visible:ring-2 focus-visible:ring-teal-400/60',
         'bg-[#1A2236] hover:bg-[#1f2940]',
         selected
@@ -156,10 +160,11 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
 
       {chips.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {chips.slice(0, 6).map((c) => (
+          {chips.map((c) => (
             <span
-              key={`${c.label}-${c.value}`}
-              className="rounded-full border border-slate-600/80 bg-slate-800/60 px-2 py-0.5 text-[10px] text-slate-300"
+              key={`${c.label}-${c.full}`}
+              title={c.full !== c.value ? c.full : undefined}
+              className="max-w-[11rem] truncate rounded-full border border-slate-600/80 bg-slate-800/60 px-2.5 py-1 text-[10px] text-slate-300"
             >
               <span className="text-slate-500">{c.label}</span> {c.value}
             </span>

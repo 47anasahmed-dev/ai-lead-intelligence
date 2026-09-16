@@ -143,6 +143,88 @@ function truncate(s: string, n: number): string {
   return t.length > n ? `${t.slice(0, n - 1)}…` : t;
 }
 
+/**
+ * One punchy line for Ideal DNA / summaries — first sentence, capped.
+ * Does not invent copy; only trims/splits real text.
+ */
+export function firstSentence(text: string | null | undefined, max = 110): string {
+  if (!text?.trim()) return '';
+  const t = text.trim().replace(/\s+/g, ' ');
+  // Prefer first sentence-like clause
+  const m = t.match(/^(.+?[.!?])(\s|$)/);
+  const head = (m?.[1] ?? t).trim();
+  return truncate(head, max);
+}
+
+/** Split multi-value AI dumps into list-like segments (`;` / `,`). */
+export function splitChipSegments(value: string): string[] {
+  const raw = value.trim();
+  if (!raw) return [];
+  if (raw.includes(';')) {
+    return raw
+      .split(';')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  // Comma lists: only when it looks like a list (2+ commas or long dump)
+  const commas = (raw.match(/,/g) ?? []).length;
+  if (commas >= 2 || (commas >= 1 && raw.length > 48)) {
+    return raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [raw];
+}
+
+/**
+ * Compact a single chip value for display; keep full original for hover title.
+ * Prefers first clause(s) before `;` / list separators.
+ */
+export function compactChipValue(
+  value: string,
+  maxLen = 32,
+  maxSegments = 1,
+): { display: string; full: string } {
+  const full = value.trim();
+  if (!full) return { display: '', full: '' };
+  const segments = splitChipSegments(full);
+  const take = Math.max(1, maxSegments);
+  const primary = segments.slice(0, take).join(' · ') || full;
+  return { display: truncate(primary, maxLen), full };
+}
+
+export type CompactDnaChip = {
+  label: string;
+  /** Short display phrase */
+  value: string;
+  /** Original value for title / tooltip */
+  full: string;
+};
+
+export type CompactDnaOpts = {
+  /** Max chips to keep (default: all) */
+  maxChips?: number;
+  /** Max chars per chip display (default 32) */
+  maxLen?: number;
+  /** Segments to keep from list-like values (1 default; 2 for Ideal strip) */
+  maxSegments?: number;
+};
+
+/** Wrap raw DNA chips into compact display chips (scoring APIs unchanged). */
+export function compactDnaChips(
+  chips: DnaChip[],
+  opts: CompactDnaOpts = {},
+): CompactDnaChip[] {
+  const maxLen = opts.maxLen ?? 32;
+  const maxSegments = opts.maxSegments ?? 1;
+  const sliced = opts.maxChips != null ? chips.slice(0, opts.maxChips) : chips;
+  return sliced.map((c) => {
+    const { display, full } = compactChipValue(c.value, maxLen, maxSegments);
+    return { label: c.label, value: display, full };
+  });
+}
+
 export type IdealDnaLike = {
   identity?: {
     industry?: string | null;

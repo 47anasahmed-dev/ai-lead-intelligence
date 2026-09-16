@@ -98,7 +98,7 @@ export function LeftRail({
   return (
     <aside className="flex h-full flex-col border-r border-slate-700/60 bg-[#1A2236] overflow-hidden">
       <div className="flex-1 overflow-y-auto">
-        <section className="border-b border-slate-700/60 p-3">
+        <section className="border-b border-slate-700/60 p-3.5">
           <div className="flex items-center justify-between">
             <h2 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
               Reference companies
@@ -106,7 +106,7 @@ export function LeftRail({
             <span className="text-[10px] text-slate-500">{references.length}/5</span>
           </div>
 
-          <div className="mt-2 space-y-1.5">
+          <div className="mt-2.5 space-y-2">
             {references.map((c) => {
               const tone = AVATAR[hash(c.name) % AVATAR.length];
               const selected = selectedRefId === c.id;
@@ -214,7 +214,7 @@ export function LeftRail({
           )}
         </section>
 
-        <section className="p-3">
+        <section className="p-3.5">
           <h2 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
             Recent searches
           </h2>
