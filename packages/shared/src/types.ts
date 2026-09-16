@@ -6,10 +6,16 @@ export type Recommendation =
   | 'MONITOR'
   | 'REJECT';
 
+export type EvidenceSource = 'csv' | 'criteria' | 'website';
+
 export interface EvidenceItem {
   field: string;
   value: string;
-  source: 'csv';
+  source: EvidenceSource;
+  /** Present for website (and future) research evidence */
+  url?: string;
+  /** Verbatim quote from source text when available */
+  evidenceQuote?: string;
 }
 
 export interface CompanyDna {
@@ -129,3 +135,15 @@ export interface CsvCompanyRow {
 }
 
 export type SearchType = 'reference' | 'criteria';
+
+/** Criteria-search filter prefs (Phase 7 lite). At least one filter field required at API. */
+export interface CriteriaPayload {
+  industry?: string;
+  geography?: string;
+  country?: string;
+  employeeRange?: string;
+  ownership?: string;
+  businessModel?: string;
+  /** Free-text notes — stored as labeled inference, never invented company facts */
+  notes?: string;
+}

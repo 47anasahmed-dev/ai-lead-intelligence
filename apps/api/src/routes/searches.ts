@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { env } from '../lib/env.js';
-import { runReferenceAnalysis } from '../services/analysis.js';
+import { runSearchAnalysis } from '../services/analysis.js';
 
 async function getDemoUserId() {
   const user = await prisma.user.findUnique({
@@ -28,37 +28,76 @@ export async function searchRoutes(app: FastifyInstance) {
   });
 
   app.post('/searches', async (req, reply) => {
+    const criteriaFields = z.object({
+      industry: z.string().trim().min(1).optional(),
+      geography: z.string().trim().min(1).optional(),
+      country: z.string().trim().min(1).optional(),
+      employeeRange: z.string().trim().min(1).optional(),
+      ownership: z.string().trim().min(1).optional(),
+      businessModel: z.string().trim().min(1).optional(),
+      notes: z.string().trim().min(1).optional(),
+    });
+
     const body = z
-      .object({
-        type: z.literal('reference'),
-        companyIds: z.array(z.string()).min(1).max(5),
-      })
+      .discriminatedUnion('type', [
+        z.object({
+          type: z.literal('reference'),
+          companyIds: z.array(z.string()).min(1).max(5),
+        }),
+        z.object({
+          type: z.literal('criteria'),
+          criteria: criteriaFields.refine(
+            (c) =>
+              Boolean(
+                c.industry ||
+                  c.geography ||
+                  c.country ||
+                  c.employeeRange ||
+                  c.ownership ||
+                  c.businessModel,
+              ),
+            { message: 'At least one filter field is required (notes alone is not enough)' },
+          ),
+        }),
+      ])
       .parse(req.body);
 
-    const unique = Array.from(new Set(body.companyIds));
-    const found = await prisma.company.findMany({
-      where: { id: { in: unique } },
-      select: { id: true },
-    });
-    if (found.length !== unique.length) {
-      return reply.code(400).send({ error: 'Invalid companyIds' });
+    const userId = await getDemoUserId();
+
+    if (body.type === 'reference') {
+      const unique = Array.from(new Set(body.companyIds));
+      const found = await prisma.company.findMany({
+        where: { id: { in: unique } },
+        select: { id: true },
+      });
+      if (found.length !== unique.length) {
+        return reply.code(400).send({ error: 'Invalid companyIds' });
+      }
+
+      const search = await prisma.search.create({
+        data: {
+          userId,
+          type: 'reference',
+          status: 'draft',
+          references: {
+            create: unique.map((companyId) => ({ companyId })),
+          },
+        },
+        include: {
+          references: { include: { company: { select: { id: true, name: true } } } },
+        },
+      });
+      return reply.code(201).send({ data: search });
     }
 
-    const userId = await getDemoUserId();
     const search = await prisma.search.create({
       data: {
         userId,
-        type: 'reference',
+        type: 'criteria',
         status: 'draft',
-        references: {
-          create: unique.map((companyId) => ({ companyId })),
-        },
-      },
-      include: {
-        references: { include: { company: { select: { id: true, name: true } } } },
+        criteria: body.criteria,
       },
     });
-
     return reply.code(201).send({ data: search });
   });
 
@@ -67,7 +106,11 @@ export async function searchRoutes(app: FastifyInstance) {
     const search = await prisma.search.findUnique({ where: { id } });
     if (!search) return reply.code(404).send({ error: 'Search not found' });
 
-    const result = await runReferenceAnalysis(id);
+    if (search.type !== 'reference' && search.type !== 'criteria') {
+      return reply.code(400).send({ error: `Unsupported search type: ${search.type}` });
+    }
+
+    const result = await runSearchAnalysis(id);
     return {
       data: {
         searchId: id,
@@ -94,11 +137,24 @@ export async function searchRoutes(app: FastifyInstance) {
 
   app.get('/searches/:id/results', async (req, reply) => {
     const { id } = z.object({ id: z.string() }).parse(req.params);
+    const query = z
+      .object({
+        limit: z.coerce.number().int().min(1).max(500).default(100),
+        recommendation: z
+          .enum(['CONTACT_NOW', 'RESEARCH_MORE', 'MONITOR', 'REJECT'])
+          .optional(),
+      })
+      .parse(req.query);
     const search = await prisma.search.findUnique({ where: { id } });
     if (!search) return reply.code(404).send({ error: 'Search not found' });
 
+    const whereQual = {
+      searchId: id,
+      ...(query.recommendation ? { recommendation: query.recommendation } : {}),
+    };
+    const totalCount = await prisma.qualification.count({ where: whereQual });
     const quals = await prisma.qualification.findMany({
-      where: { searchId: id },
+      where: whereQual,
       include: {
         company: {
           select: {
@@ -114,6 +170,7 @@ export async function searchRoutes(app: FastifyInstance) {
         },
       },
       orderBy: [{ qualificationScore: 'desc' }, { confidence: 'desc' }],
+      take: query.limit,
     });
 
     const sims = await prisma.similarityResult.findMany({
@@ -149,8 +206,64 @@ export async function searchRoutes(app: FastifyInstance) {
         searchId: id,
         status: search.status,
         count: data.length,
+        totalCount,
+        limit: query.limit,
         idealDna: search.idealDna,
       },
     };
   });
+
+  /** Progressive disclosure: scores for one company inside a completed search */
+  app.get('/searches/:id/companies/:companyId', async (req, reply) => {
+    const params = z
+      .object({ id: z.string(), companyId: z.string() })
+      .parse(req.params);
+
+    const search = await prisma.search.findUnique({ where: { id: params.id } });
+    if (!search) return reply.code(404).send({ error: 'Search not found' });
+
+    const company = await prisma.company.findUnique({ where: { id: params.companyId } });
+    if (!company) return reply.code(404).send({ error: 'Company not found' });
+
+    const [qualification, similarity, profile, evidence] = await Promise.all([
+      prisma.qualification.findUnique({
+        where: {
+          searchId_companyId: { searchId: params.id, companyId: params.companyId },
+        },
+      }),
+      prisma.similarityResult.findUnique({
+        where: {
+          searchId_companyId: { searchId: params.id, companyId: params.companyId },
+        },
+      }),
+      prisma.companyProfile.findUnique({ where: { companyId: params.companyId } }),
+      prisma.evidence.findMany({
+        where: { companyId: params.companyId },
+        take: 50,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    const { demoFit: _demoFit, rawData: _raw, ...publicCompany } = company;
+
+    return {
+      data: {
+        searchId: params.id,
+        searchStatus: search.status,
+        idealDna: search.idealDna,
+        company: publicCompany,
+        dna: profile?.dna ?? null,
+        evidence,
+        qualification,
+        similarity: similarity
+          ? {
+              overallScore: similarity.overallScore,
+              dimensions: similarity.dimensions,
+              explanation: similarity.explanation,
+            }
+          : null,
+      },
+    };
+  });
+
 }

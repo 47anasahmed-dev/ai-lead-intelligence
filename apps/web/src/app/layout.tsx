@@ -19,7 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <TooltipProvider>
           <header className="border-b border-border bg-background">
             <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-              <Link href="/" className="font-semibold text-primary-foreground">
+              <Link href="/" className="font-semibold text-foreground">
                 AI Lead Intelligence
               </Link>
               <nav className="flex gap-4 text-sm text-muted-foreground">

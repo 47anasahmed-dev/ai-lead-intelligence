@@ -9,6 +9,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertCircle, Search, Loader2, ArrowRight } from 'lucide-react';
 
+function typeLabel(type: string) {
+  const map: Record<string, string> = {
+    reference: 'Reference',
+    criteria: 'Criteria',
+  };
+  return map[type] ?? type;
+}
+
 function statusBadge(status: string) {
   const map: Record<string, { variant: 'default' | 'secondary' | 'outline' | 'destructive'; label: string }> = {
     draft: { variant: 'outline', label: 'Draft' },
@@ -139,9 +147,12 @@ export default function DashboardPage() {
                 className="flex items-center justify-between gap-4 border-b px-4 py-3 last:border-0"
               >
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                      {s.type}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      {typeLabel(s.type)}
+                    </span>
+                    <span className="text-muted-foreground/40" aria-hidden>
+                      ·
                     </span>
                     {statusBadge(s.status)}
                   </div>

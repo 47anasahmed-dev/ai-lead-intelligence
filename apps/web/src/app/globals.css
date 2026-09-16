@@ -1,8 +1,8 @@
-@import "shadcn/tailwind.css";
+@import "tailwindcss";
 @import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
 @theme {
-  /* Base UI color tokens */
   --color-background: oklch(1 0 0);
   --color-foreground: oklch(0.145 0 0);
 
@@ -43,15 +43,16 @@
   --radius-xl: 0.75rem;
   --radius-2xl: 0.875rem;
   --radius-3xl: 1rem;
+
+  --font-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
   * {
-    border-color: var(--color-border);
+    @apply border-border;
   }
 
   body {
-    background-color: var(--color-background);
-    color: var(--color-foreground);
+    @apply bg-background text-foreground antialiased;
   }
 }

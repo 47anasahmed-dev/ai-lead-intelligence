@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCompanyDnaFromCsvRow, buildIdealDna } from './dna.js';
+import { buildCompanyDnaFromCsvRow, buildIdealDna, buildIdealDnaFromCriteria } from './dna.js';
 import { similarityScore } from './similarity.js';
 import { qualificationScore, recommend } from './qualification.js';
 import { deterministicFilter } from './filter.js';
@@ -210,5 +210,188 @@ describe('Phase0 contract invariants', () => {
     expect(ideal.identity.industry).toBe('B2B SaaS');
     expect(ideal.facts.some((f) => /2 reference/.test(f))).toBe(true);
     expect(ideal.identity.website).toBeNull();
+  });
+});
+
+describe('normalize helpers', () => {
+  it('parses revenue suffixes and blanks', async () => {
+    const { parseRevenue, blankToNull, parseYear, sizeProximityScore } = await import(
+      './normalize.js'
+    );
+    expect(parseRevenue('10M')).toBe(10_000_000);
+    expect(parseRevenue('$1,250')).toBe(1250);
+    expect(parseRevenue('')).toBeNull();
+    expect(blankToNull(' n/a ')).toBeNull();
+    expect(parseYear('2019')).toBe(2019);
+    expect(parseYear('99')).toBeNull();
+    expect(sizeProximityScore('51-100', '51-100')).toBe(100);
+    expect(sizeProximityScore('1-10', '5001-10000')).toBeLessThan(20);
+  });
+});
+
+describe('buildIdealDnaFromCriteria', () => {
+  it('builds facts from provided fields and unknowns for the rest', () => {
+    const ideal = buildIdealDnaFromCriteria({
+      industry: 'B2B SaaS',
+      geography: 'North America',
+      businessModel: 'B2B SaaS',
+      notes: 'Prefer mid-market data teams',
+    });
+    expect(ideal.companyId).toBe('IDEAL');
+    expect(ideal.identity.industry).toBe('B2B SaaS');
+    expect(ideal.geography.region).toBe('North America');
+    expect(ideal.businessModel.model).toBe('B2B SaaS');
+    expect(ideal.size.employeeRange).toBeNull();
+    expect(ideal.ownership.type).toBeNull();
+    expect(ideal.facts.some((f) => /Industry: B2B SaaS/.test(f))).toBe(true);
+    expect(ideal.unknowns.some((u) => u.includes('employee_range'))).toBe(true);
+    expect(ideal.unknowns.some((u) => u.includes('ownership'))).toBe(true);
+    expect(ideal.unknowns.some((u) => u.includes('primary_service'))).toBe(true);
+    expect(ideal.inferences.some((i) => /user notes/.test(i))).toBe(true);
+    expect(ideal.evidence.every((e) => e.source === 'criteria')).toBe(true);
+    // Does not invent services / customers
+    expect(ideal.identity.primaryService).toBeNull();
+    expect(ideal.customers.profile).toBeNull();
+  });
+
+  it('ignores blank strings and does not invent geography from notes', () => {
+    const ideal = buildIdealDnaFromCriteria({
+      industry: '  ',
+      ownership: 'Private',
+      notes: 'Must be in Europe',
+    });
+    expect(ideal.identity.industry).toBeNull();
+    expect(ideal.ownership.type).toBe('Private');
+    expect(ideal.geography.region).toBeNull();
+    expect(ideal.geography.country).toBeNull();
+    expect(ideal.facts.join(' ')).not.toMatch(/Europe/);
+  });
+});
+
+describe('criteria filter behavior', () => {
+  it('keeps industry peers when ideal comes from criteria', () => {
+    const ideal = buildIdealDnaFromCriteria({
+      industry: 'B2B SaaS',
+      geography: 'North America',
+    });
+    const pool = [
+      buildCompanyDnaFromCsvRow(row({ company_id: 'C1', company_name: 'Peer' })),
+      buildCompanyDnaFromCsvRow(
+        row({
+          company_id: 'C2',
+          company_name: 'Other',
+          industry: 'Mining',
+          business_model: 'Extraction',
+          geography: 'Africa',
+          country: 'ZA',
+        }),
+      ),
+    ];
+    const filtered = deterministicFilter(ideal, pool, new Set());
+    expect(filtered.find((c) => c.companyId === 'C1')).toBeTruthy();
+    expect(filtered.find((c) => c.companyId === 'C2')).toBeUndefined();
+  });
+
+  it('scores criteria ideal against peers without excluding anyone by default', () => {
+    const ideal = buildIdealDnaFromCriteria({
+      industry: 'B2B SaaS',
+      businessModel: 'B2B SaaS',
+      employeeRange: '51-100',
+    });
+    const peer = buildCompanyDnaFromCsvRow(row({ company_id: 'C10', company_name: 'Peer' }));
+    const far = buildCompanyDnaFromCsvRow(
+      row({
+        company_id: 'C99',
+        company_name: 'Far',
+        industry: 'Food & Beverage',
+        business_model: 'B2C Manufacturing',
+        geography: 'Europe',
+        country: 'Germany',
+        employee_range: '5001-10000',
+      }),
+    );
+    const filtered = deterministicFilter(ideal, [peer, far], new Set());
+    expect(filtered.map((c) => c.companyId)).toEqual(['C10']);
+    const sim = similarityScore(ideal, peer);
+    const q = qualificationScore(ideal, peer, sim);
+    expect(sim.overallScore).toBeGreaterThan(30);
+    expect(q.recommendation).not.toBe('REJECT');
+  });
+});
+
+describe('ai provider stub', () => {
+  it('noop never invents inferences', async () => {
+    const { createAiProvider } = await import('./aiProvider.js');
+    const p = createAiProvider();
+    const out = await p.enrich({
+      companyId: 'x',
+      facts: ['Name: Acme'],
+      unknowns: ['ownership'],
+    });
+    expect(out.inferences).toEqual([]);
+    expect(out.provider).toBe('noop');
+  });
+});
+
+describe('enrichment quote filter', () => {
+  it('rejects fabricated evidence quotes not in source', async () => {
+    const { filterByEvidenceQuote, sanitizeEnrichment } = await import('./aiProvider.js');
+    const source =
+      'Acme provides commercial HVAC maintenance plans for hospitals and schools.';
+    const kept = filterByEvidenceQuote(
+      [
+        {
+          text: 'Serves institutional buyers',
+          evidenceQuote: 'hospitals and schools',
+        },
+        {
+          text: 'Invented IPO rumor',
+          evidenceQuote: 'planning to IPO next year',
+        },
+      ],
+      source,
+    );
+    expect(kept).toHaveLength(1);
+    expect(kept[0].evidenceQuote).toBe('hospitals and schools');
+
+    const sanitized = sanitizeEnrichment(
+      {
+        inferences: [
+          { text: 'ok', evidenceQuote: 'HVAC maintenance' },
+          { text: 'bad', evidenceQuote: 'series B funding' },
+        ],
+        filledUnknowns: [
+          {
+            field: 'business_model',
+            value: 'maintenance contracts',
+            evidenceQuote: 'commercial HVAC maintenance plans',
+          },
+          {
+            field: 'ownership',
+            value: 'Private',
+            evidenceQuote: 'privately held since 1990',
+          },
+        ],
+        narrativeBullets: ['Strong commercial focus'],
+        unknownsRemaining: ['ownership'],
+      },
+      source,
+    );
+    expect(sanitized.inferences).toHaveLength(1);
+    expect(sanitized.filledUnknowns).toHaveLength(1);
+    expect(sanitized.filledUnknowns[0].field).toBe('business_model');
+    expect(sanitized.narrativeBullets).toEqual(['Strong commercial focus']);
+  });
+
+  it('noop generateStructured returns empty safe defaults', async () => {
+    const { createAiProvider, EMPTY_ENRICHMENT } = await import('./aiProvider.js');
+    const p = createAiProvider('openrouter');
+    const structured = await p.generateStructured({
+      systemPrompt: 'x',
+      userPrompt: 'y',
+      schema: {},
+    });
+    expect(structured).toEqual(EMPTY_ENRICHMENT);
+    expect(p.name).toBe('noop');
   });
 });

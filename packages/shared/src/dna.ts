@@ -1,4 +1,4 @@
-import type { CompanyDna, CsvCompanyRow, EvidenceItem } from './types.js';
+import type { CompanyDna, CriteriaPayload, CsvCompanyRow, EvidenceItem } from './types.js';
 import { blankToNull, parseRevenue, parseYear } from './normalize.js';
 
 function pushFact(
@@ -214,5 +214,93 @@ export function buildIdealDna(references: CompanyDna[]): CompanyDna {
       })),
     ),
     confidence: avgConf,
+  };
+}
+
+/**
+ * Build Ideal DNA / filter prefs from a criteria payload.
+ * Facts only from provided fields; unknowns for the rest; never invent company attributes.
+ * Notes become a labeled inference (not a fact).
+ */
+export function buildIdealDnaFromCriteria(criteria: CriteriaPayload): CompanyDna {
+  const blank = (v: string | undefined): string | null => {
+    if (v == null) return null;
+    const t = v.trim();
+    return t.length ? t : null;
+  };
+
+  const industry = blank(criteria.industry);
+  const geography = blank(criteria.geography);
+  const country = blank(criteria.country);
+  const employeeRange = blank(criteria.employeeRange);
+  const ownership = blank(criteria.ownership);
+  const businessModel = blank(criteria.businessModel);
+  const notes = blank(criteria.notes);
+
+  const facts: string[] = ['Ideal DNA derived from criteria search prefs'];
+  const inferences: string[] = [];
+  const unknowns: string[] = [];
+  const evidence: EvidenceItem[] = [];
+
+  const push = (field: string, value: string | null, label: string) => {
+    if (!value) return;
+    facts.push(label);
+    evidence.push({ field, value, source: 'criteria' });
+  };
+
+  push('industry', industry, `Industry: ${industry}`);
+  push('geography', geography, `Geography: ${geography}`);
+  push('country', country, `Country: ${country}`);
+  push('employee_range', employeeRange, `Employees: ${employeeRange}`);
+  push('ownership', ownership, `Ownership: ${ownership}`);
+  push('business_model', businessModel, `Business model: ${businessModel}`);
+
+  if (notes) {
+    inferences.push(`Inference (user notes): ${notes}`);
+  }
+
+  const tracked: Array<[string, string | null]> = [
+    ['industry', industry],
+    ['geography', geography],
+    ['country', country],
+    ['employee_range', employeeRange],
+    ['ownership', ownership],
+    ['business_model', businessModel],
+    ['primary_service', null],
+    ['customer_profile', null],
+    ['growth_signal', null],
+  ];
+  for (const [field, val] of tracked) {
+    if (val == null) unknowns.push(`Unknown: ${field}`);
+  }
+
+  const provided = [industry, geography, country, employeeRange, ownership, businessModel].filter(
+    Boolean,
+  ).length;
+  // Confidence reflects how many filter prefs were supplied (max 6)
+  const confidence = Math.round((provided / 6) * 100);
+
+  return {
+    companyId: 'IDEAL',
+    identity: {
+      name: 'Ideal Customer Profile (criteria)',
+      website: null,
+      industry,
+      primaryService: null,
+      description: null,
+    },
+    customers: { profile: null },
+    businessModel: { model: businessModel, revenueModel: null },
+    size: { employeeRange, estimatedRevenueUsd: null },
+    ownership: { type: ownership },
+    growth: { signal: null, foundedYear: null },
+    reputation: { signal: null },
+    technology: { stack: null },
+    geography: { region: geography, country, city: null, state: null },
+    facts,
+    inferences,
+    unknowns,
+    evidence,
+    confidence,
   };
 }
