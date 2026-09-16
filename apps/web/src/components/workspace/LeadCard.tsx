@@ -33,25 +33,29 @@ function recStyle(rec: string): { label: string; className: string } {
     case 'CONTACT_NOW':
       return {
         label: 'CONTACT NOW',
-        className: 'bg-teal-500 text-teal-950 font-bold',
+        className:
+          'bg-emerald-400 text-emerald-950 font-bold shadow-sm shadow-emerald-400/25 border border-emerald-300/40',
       };
     case 'RESEARCH_MORE':
       return {
         label: 'RESEARCH MORE',
-        className: 'bg-amber-400/90 text-amber-950 font-bold',
+        className:
+          'bg-amber-400 text-amber-950 font-bold shadow-sm shadow-amber-400/25 border border-amber-300/40',
       };
     case 'MONITOR':
       return {
         label: 'MONITOR',
-        className: 'bg-slate-600 text-slate-100 font-semibold',
+        className:
+          'bg-slate-600 text-sky-100 font-bold border border-blue-400/35 shadow-sm shadow-blue-500/10',
       };
     case 'REJECT':
       return {
         label: 'REJECT',
-        className: 'bg-rose-500/80 text-white font-semibold',
+        className:
+          'bg-rose-500 text-white font-bold shadow-sm shadow-rose-500/25 border border-rose-400/40',
       };
     default:
-      return { label: rec, className: 'bg-slate-700 text-slate-200' };
+      return { label: rec, className: 'bg-slate-700 text-slate-200 font-semibold' };
   }
 }
 
@@ -153,7 +157,12 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
             tooltip={`${evidenceCount} evidence row${evidenceCount === 1 ? '' : 's'} from CSV / website research.`}
           />
         </div>
-        <span className={cn('rounded-md px-2 py-1 text-[10px] tracking-wide', rec.className)}>
+        <span
+          className={cn(
+            'rounded-md px-2.5 py-1 text-[10px] uppercase tracking-[0.04em] shrink-0',
+            rec.className,
+          )}
+        >
           {rec.label}
         </span>
       </div>
@@ -164,7 +173,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
             <span
               key={`${c.label}-${c.full}`}
               title={c.full !== c.value ? c.full : undefined}
-              className="max-w-[11rem] truncate rounded-full border border-slate-600/80 bg-slate-800/60 px-2.5 py-1 text-[10px] text-slate-300"
+              className="max-w-[11rem] truncate rounded-full border border-slate-500/50 bg-slate-800/80 px-2.5 py-1 text-[10px] text-slate-200 shadow-sm shadow-black/20"
             >
               <span className="text-slate-500">{c.label}</span> {c.value}
             </span>
@@ -187,10 +196,10 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
           <span
             title={hint.title}
             className={cn(
-              'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium',
+              'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold',
               hint.kind === 'no_web'
-                ? 'bg-slate-700/80 text-slate-300'
-                : 'bg-rose-500/15 text-rose-300',
+                ? 'bg-violet-500/15 text-violet-300 border border-violet-400/25'
+                : 'bg-rose-500/18 text-rose-300 border border-rose-400/30',
             )}
           >
             <AlertTriangle className="h-3 w-3" />
@@ -198,7 +207,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
           </span>
         )}
         {(row.missingInformation?.length ?? 0) > 0 && !hint && (
-          <span className="rounded-md bg-slate-700/60 px-1.5 py-0.5 text-[10px] text-slate-400">
+          <span className="rounded-md bg-violet-500/15 border border-violet-400/25 px-1.5 py-0.5 text-[10px] font-semibold text-violet-300">
             AI: missing info ({row.missingInformation.length})
           </span>
         )}
