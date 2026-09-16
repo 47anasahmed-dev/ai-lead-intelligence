@@ -5,13 +5,16 @@ import { Plus, Search, X } from 'lucide-react';
 import { client, type CompanyListItem, type SearchRefCompany, type SearchSummary } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
+/** Saturated squircle fills matching mockup .av-* gradients (solid, not muted). */
 const AVATAR = [
-  'bg-violet-500/30 text-violet-200',
-  'bg-sky-500/30 text-sky-200',
-  'bg-emerald-500/30 text-emerald-200',
-  'bg-amber-500/30 text-amber-200',
-  'bg-rose-500/30 text-rose-200',
-  'bg-teal-500/30 text-teal-200',
+  'bg-gradient-to-br from-indigo-500 to-violet-500 text-white',
+  'bg-gradient-to-br from-red-500 to-orange-500 text-white',
+  'bg-gradient-to-br from-sky-500 to-cyan-500 text-white',
+  'bg-gradient-to-br from-emerald-500 to-teal-500 text-white',
+  'bg-gradient-to-br from-purple-500 to-pink-500 text-white',
+  'bg-gradient-to-br from-amber-500 to-yellow-500 text-white',
+  'bg-gradient-to-br from-blue-500 to-indigo-500 text-white',
+  'bg-gradient-to-br from-rose-500 to-orange-400 text-white',
 ] as const;
 
 function initials(name: string): string {
@@ -114,28 +117,30 @@ export function LeftRail({
                 <div
                   key={c.id}
                   className={cn(
-                    'group flex items-center gap-2 rounded-lg border px-2 py-1.5 transition-colors',
+                    'group flex items-center gap-2 rounded-xl border px-2.5 py-2 transition-all',
                     selected
-                      ? 'border-blue-400/60 bg-blue-500/10'
-                      : 'border-transparent hover:border-slate-600 hover:bg-slate-800/50',
+                      ? 'border-teal-400/70 bg-teal-500/15 shadow-[0_0_0_1px_rgba(45,212,191,0.35),0_0_18px_rgba(20,184,166,0.2)]'
+                      : 'border-slate-700/80 bg-[#121826]/60 hover:border-teal-500/40 hover:bg-slate-800/40',
                   )}
                 >
                   <button
                     type="button"
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
                     onClick={() => onSelectReference(c)}
                   >
                     <span
                       className={cn(
-                        'flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[10px] font-bold',
+                        'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[11px] font-extrabold shadow-sm',
                         tone,
                       )}
                     >
                       {initials(c.name)}
                     </span>
                     <span className="min-w-0">
-                      <span className="block truncate text-xs font-medium text-white">{c.name}</span>
-                      <span className="block truncate text-[10px] text-slate-500">
+                      <span className="block truncate text-[12.5px] font-semibold text-white">
+                        {c.name}
+                      </span>
+                      <span className="block truncate text-[11px] text-slate-400">
                         {c.industry ?? '—'}
                       </span>
                     </span>

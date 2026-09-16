@@ -7,12 +7,12 @@ import { companyDnaChips, compactDnaChips, aiRiskHint, leadAiOneLiner } from '@/
 import { MetricRing, QualifyScore } from './MetricRing';
 
 const AVATAR = [
-  'bg-violet-500/30 text-violet-200',
-  'bg-sky-500/30 text-sky-200',
-  'bg-emerald-500/30 text-emerald-200',
-  'bg-amber-500/30 text-amber-200',
-  'bg-rose-500/30 text-rose-200',
-  'bg-teal-500/30 text-teal-200',
+  'bg-gradient-to-br from-indigo-500 to-violet-500 text-white',
+  'bg-gradient-to-br from-red-500 to-orange-500 text-white',
+  'bg-gradient-to-br from-sky-500 to-cyan-500 text-white',
+  'bg-gradient-to-br from-emerald-500 to-teal-500 text-white',
+  'bg-gradient-to-br from-purple-500 to-pink-500 text-white',
+  'bg-gradient-to-br from-amber-500 to-yellow-500 text-white',
 ] as const;
 
 function initials(name: string): string {
@@ -34,28 +34,28 @@ function recStyle(rec: string): { label: string; className: string } {
       return {
         label: 'CONTACT NOW',
         className:
-          'bg-emerald-400 text-emerald-950 font-bold shadow-sm shadow-emerald-400/25 border border-emerald-300/40',
+          'bg-emerald-400/15 text-emerald-300 border border-emerald-400/40 font-bold',
       };
     case 'RESEARCH_MORE':
       return {
         label: 'RESEARCH MORE',
         className:
-          'bg-amber-400 text-amber-950 font-bold shadow-sm shadow-amber-400/25 border border-amber-300/40',
+          'bg-amber-400/15 text-amber-300 border border-amber-400/40 font-bold',
       };
     case 'MONITOR':
       return {
         label: 'MONITOR',
         className:
-          'bg-slate-600 text-sky-100 font-bold border border-blue-400/35 shadow-sm shadow-blue-500/10',
+          'bg-blue-500/15 text-sky-300 border border-blue-400/35 font-semibold',
       };
     case 'REJECT':
       return {
         label: 'REJECT',
         className:
-          'bg-rose-500 text-white font-bold shadow-sm shadow-rose-500/25 border border-rose-400/40',
+          'bg-rose-400/12 text-rose-300 border border-rose-400/30 font-semibold',
       };
     default:
-      return { label: rec, className: 'bg-slate-700 text-slate-200 font-semibold' };
+      return { label: rec, className: 'bg-slate-700/60 text-slate-300 border border-slate-600 font-semibold' };
   }
 }
 
@@ -105,8 +105,8 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
         'focus-visible:ring-2 focus-visible:ring-teal-400/60',
         'bg-[#1A2236] hover:bg-[#1f2940]',
         selected
-          ? 'border-teal-400 shadow-[0_0_0_1px_rgba(45,212,191,0.45)]'
-          : 'border-slate-700/80 hover:border-slate-600',
+          ? 'border-teal-400/70 bg-gradient-to-br from-teal-500/14 to-[#1A2236] shadow-[inset_3px_0_0_#2DD4BF,0_0_0_1px_rgba(45,212,191,0.35),0_0_28px_rgba(20,184,166,0.18)]'
+          : 'border-slate-700/80 hover:border-teal-500/45 hover:shadow-[0_0_0_1px_rgba(20,184,166,0.2),0_12px_28px_rgba(0,0,0,0.35)]',
       )}
     >
       <div className="flex items-start gap-3">
@@ -173,7 +173,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
             <span
               key={`${c.label}-${c.full}`}
               title={c.full !== c.value ? c.full : undefined}
-              className="max-w-[11rem] truncate rounded-full border border-slate-500/50 bg-slate-800/80 px-2.5 py-1 text-[10px] text-slate-200 shadow-sm shadow-black/20"
+              className="max-w-[11rem] truncate rounded-full border border-slate-600/80 bg-slate-800/60 px-2.5 py-1 text-[10px] text-slate-300"
             >
               <span className="text-slate-500">{c.label}</span> {c.value}
             </span>
@@ -196,10 +196,10 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
           <span
             title={hint.title}
             className={cn(
-              'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold',
+              'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium',
               hint.kind === 'no_web'
-                ? 'bg-violet-500/15 text-violet-300 border border-violet-400/25'
-                : 'bg-rose-500/18 text-rose-300 border border-rose-400/30',
+                ? 'bg-slate-700/80 text-slate-300'
+                : 'bg-rose-500/15 text-rose-300',
             )}
           >
             <AlertTriangle className="h-3 w-3" />
@@ -207,7 +207,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
           </span>
         )}
         {(row.missingInformation?.length ?? 0) > 0 && !hint && (
-          <span className="rounded-md bg-violet-500/15 border border-violet-400/25 px-1.5 py-0.5 text-[10px] font-semibold text-violet-300">
+          <span className="rounded-md bg-slate-700/60 px-1.5 py-0.5 text-[10px] text-slate-400">
             AI: missing info ({row.missingInformation.length})
           </span>
         )}

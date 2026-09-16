@@ -7,7 +7,6 @@ type Props = {
   label: string;
   value: number | null;
   tooltip: string;
-  /** Stroke color override; when omitted, uses score-band coloring. */
   accent?: 'teal' | 'blue' | 'amber';
   size?: number;
 };
@@ -18,96 +17,68 @@ const ACCENT = {
   amber: '#FBBF24',
 } as const;
 
-/** Score-band colors matching hybrid mockup ringColor(). */
-export function scoreBandColor(score: number): string {
-  if (score >= 80) return '#34d399';
-  if (score >= 65) return '#fbbf24';
-  return '#9CA3AF';
-}
+const QUALIFY_TEAL = '#2DD4BF';
 
-function RingSvg({
-  value,
-  color,
-  size,
-  stroke = 4.5,
-  fontSize,
-}: {
-  value: number | null;
-  color: string;
-  size: number;
-  stroke?: number;
-  fontSize: number;
-}) {
-  const v = value == null ? null : Math.min(100, Math.max(0, value));
-  const r = (size - stroke) / 2 - 1;
-  const cx = size / 2;
-  const cy = size / 2;
-  const circumference = 2 * Math.PI * r;
-  const pct = v == null ? 0 : v / 100;
-  const dash = circumference * pct;
-
-  return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg
-        width={size}
-        height={size}
-        viewBox={`0 0 ${size} ${size}`}
-        aria-hidden
-        className="-rotate-90"
-      >
-        <circle
-          cx={cx}
-          cy={cy}
-          r={r}
-          fill="none"
-          stroke="#121826"
-          strokeWidth={stroke}
-        />
-        {v != null && (
-          <circle
-            cx={cx}
-            cy={cy}
-            r={r}
-            fill="none"
-            stroke={color}
-            strokeWidth={stroke}
-            strokeLinecap="round"
-            strokeDasharray={`${dash} ${circumference}`}
-          />
-        )}
-      </svg>
-      <span
-        className="absolute inset-0 grid place-items-center font-bold tabular-nums leading-none"
-        style={{ fontSize, color: v == null ? '#9CA3AF' : color }}
-      >
-        {v == null ? '—' : Math.round(v)}
-      </span>
-    </div>
-  );
-}
-
+/** Half-arc ring for Similarity / Confidence / Evidence (pre–PR #6 style). */
 export function MetricRing({
   label,
   value,
   tooltip,
-  accent,
-  size = 48,
+  accent = 'teal',
+  size = 56,
 }: Props) {
   const v = value == null ? null : Math.min(100, Math.max(0, value));
-  const color = accent ? ACCENT[accent] : scoreBandColor(v ?? 0);
+  const stroke = 4;
+  const r = (size - stroke) / 2;
+  const cx = size / 2;
+  const cy = size / 2;
+  const circumference = Math.PI * r;
+  const pct = v == null ? 0 : v / 100;
+  const dash = circumference * pct;
+  const color = ACCENT[accent];
 
   return (
     <Tooltip>
       <TooltipTrigger
         delay={200}
         render={
-          <div className="flex flex-col items-center gap-1 cursor-default outline-none" />
+          <div className="flex flex-col items-center gap-0.5 cursor-default outline-none" />
         }
       >
-        <RingSvg value={v} color={color} size={size} fontSize={size >= 52 ? 14 : 12} />
-        <span className="text-[9px] font-bold uppercase tracking-[0.06em] text-slate-500">
-          {label}
-        </span>
+        <svg
+          width={size}
+          height={size / 2 + 8}
+          viewBox={`0 0 ${size} ${size / 2 + 8}`}
+          aria-hidden
+        >
+          <path
+            d={`M ${stroke / 2} ${cy} A ${r} ${r} 0 0 1 ${size - stroke / 2} ${cy}`}
+            fill="none"
+            stroke="rgba(148,163,184,0.25)"
+            strokeWidth={stroke}
+            strokeLinecap="round"
+          />
+          {v != null && (
+            <path
+              d={`M ${stroke / 2} ${cy} A ${r} ${r} 0 0 1 ${size - stroke / 2} ${cy}`}
+              fill="none"
+              stroke={color}
+              strokeWidth={stroke}
+              strokeLinecap="round"
+              strokeDasharray={`${dash} ${circumference}`}
+            />
+          )}
+          <text
+            x={cx}
+            y={cy - 2}
+            textAnchor="middle"
+            fill="#fff"
+            style={{ fontSize: 12, fontWeight: 700 }}
+          >
+            {v == null ? '—' : Math.round(v)}
+          </text>
+        </svg>
+        <span className="text-[10px] uppercase tracking-wide text-slate-400">{label}</span>
       </TooltipTrigger>
       <TooltipContent className="max-w-xs bg-slate-900 text-slate-100">
         {tooltip}
@@ -116,6 +87,7 @@ export function MetricRing({
   );
 }
 
+/** Full-circle Qualify score with fixed teal stroke (not score-band coloring). */
 export function QualifyScore({
   score,
   businessFit,
@@ -129,7 +101,15 @@ export function QualifyScore({
   className?: string;
   size?: number;
 }) {
-  const color = scoreBandColor(score);
+  const v = Math.min(100, Math.max(0, score));
+  const stroke = 5;
+  const r = (size - stroke) / 2 - 1;
+  const cx = size / 2;
+  const cy = size / 2;
+  const circumference = 2 * Math.PI * r;
+  const dash = circumference * (v / 100);
+  const color = QUALIFY_TEAL;
+  const fontSize = size >= 58 ? 16 : 14;
 
   return (
     <Tooltip>
@@ -144,13 +124,40 @@ export function QualifyScore({
           />
         }
       >
-        <RingSvg
-          value={score}
-          color={color}
-          size={size}
-          stroke={5}
-          fontSize={size >= 58 ? 16 : 14}
-        />
+        <div className="relative shrink-0" style={{ width: size, height: size }}>
+          <svg
+            width={size}
+            height={size}
+            viewBox={`0 0 ${size} ${size}`}
+            aria-hidden
+            className="-rotate-90"
+          >
+            <circle
+              cx={cx}
+              cy={cy}
+              r={r}
+              fill="none"
+              stroke="#121826"
+              strokeWidth={stroke}
+            />
+            <circle
+              cx={cx}
+              cy={cy}
+              r={r}
+              fill="none"
+              stroke={color}
+              strokeWidth={stroke}
+              strokeLinecap="round"
+              strokeDasharray={`${dash} ${circumference}`}
+            />
+          </svg>
+          <span
+            className="absolute inset-0 grid place-items-center font-bold tabular-nums leading-none"
+            style={{ fontSize, color }}
+          >
+            {Math.round(v)}
+          </span>
+        </div>
         <span className="text-[9px] font-bold uppercase tracking-[0.06em] text-slate-500">
           Qualify
         </span>

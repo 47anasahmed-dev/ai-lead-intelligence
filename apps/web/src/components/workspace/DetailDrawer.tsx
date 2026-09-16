@@ -173,46 +173,71 @@ function LeadPanel({
 }) {
   const href = linkForCompany(row.company.website, row.company.linkedinUrl);
   const dna = detail?.dna ?? null;
-  const chips = compactDnaChips(
-    companyDnaChips({
-      industry: row.company.industry ?? dna?.identity?.industry ?? null,
-      primaryService: row.company.primaryService ?? dna?.identity?.primaryService ?? null,
-      ownership: row.company.ownership ?? dna?.ownership?.type ?? null,
-      geography: row.company.geography ?? dna?.geography?.region ?? null,
-      employeeRange: row.company.employeeRange ?? dna?.size?.employeeRange ?? null,
-      businessModel: row.company.businessModel ?? dna?.businessModel?.model ?? null,
-    }),
-    { maxLen: 36, maxSegments: 1 },
-  );
+  const rawDna = companyDnaChips({
+    industry: row.company.industry ?? dna?.identity?.industry ?? null,
+    primaryService: row.company.primaryService ?? dna?.identity?.primaryService ?? null,
+    ownership: row.company.ownership ?? dna?.ownership?.type ?? null,
+    geography: row.company.geography ?? dna?.geography?.region ?? null,
+    employeeRange: row.company.employeeRange ?? dna?.size?.employeeRange ?? null,
+    businessModel: row.company.businessModel ?? dna?.businessModel?.model ?? null,
+  });
+  // Prefer Ideal-DNA-style labels when enrichment present
+  const fromIdeal = dna
+    ? [
+        { label: 'Industry', value: dna.identity?.industry },
+        { label: 'Ownership', value: dna.ownership?.type },
+        { label: 'Geo', value: dna.geography?.region ?? dna.geography?.country },
+        { label: 'Growth', value: dna.growth?.signal },
+        { label: 'Size', value: dna.size?.employeeRange },
+        { label: 'Customers', value: dna.customers?.profile },
+      ]
+        .filter((x): x is { label: string; value: string } => Boolean(x.value?.trim()))
+        .map((x) => ({ label: x.label, value: x.value!.trim(), full: x.value!.trim() }))
+    : [];
+  const chips =
+    fromIdeal.length >= 3
+      ? fromIdeal
+      : compactDnaChips(rawDna, { maxLen: 48, maxSegments: 2 });
   const evidence = detail?.evidence ?? row.evidence ?? [];
   const ai = buildLeadAiBundle(row, dna);
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
-      <header className="sticky top-0 z-10 border-b border-slate-700/60 bg-[#232B3E]/60 px-4 py-3 backdrop-blur">
-        <div className="flex items-center gap-2">
-          <span className="rounded-full bg-teal-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal-300">
-            ● Live selection · Lead
-          </span>
-        </div>
-        <div className="mt-2 flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            {href ? (
-              <a
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-base font-semibold text-teal-300 hover:underline"
-              >
-                <span className="truncate">{row.company.name}</span>
-                <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-              </a>
-            ) : (
-              <h2 className="truncate text-base font-semibold text-white">{row.company.name}</h2>
-            )}
-            <p className="mt-0.5 truncate text-xs text-slate-400">
-              {[row.company.industry, row.company.geography].filter(Boolean).join(' · ') || '—'}
-            </p>
+      <header className="sticky top-0 z-10 border-b border-slate-700/60 bg-[#232B3E]/80 px-4 py-3 backdrop-blur">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-start gap-3">
+            <span
+              className={cn(
+                'flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] text-sm font-extrabold text-white shadow-sm',
+                drawerAvatarTone(row.company.name),
+              )}
+            >
+              {drawerInitials(row.company.name)}
+            </span>
+            <div className="min-w-0">
+              {href ? (
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex max-w-full items-center gap-1.5 text-base font-bold tracking-tight text-white hover:text-teal-300"
+                >
+                  <span className="truncate">{row.company.name}</span>
+                  <ExternalLink className="h-3.5 w-3.5 shrink-0 text-teal-400" />
+                </a>
+              ) : (
+                <h2 className="truncate text-base font-bold tracking-tight text-white">
+                  {row.company.name}
+                </h2>
+              )}
+              <p className="mt-0.5 truncate text-xs text-slate-400">
+                {[row.company.industry, row.company.geography].filter(Boolean).join(' · ') || '—'}
+              </p>
+              <div className="mt-1.5 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-teal-400">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-teal-400 shadow-[0_0_0_3px_rgba(45,212,191,0.25)]" />
+                Live selection
+              </div>
+            </div>
           </div>
           <button
             type="button"
@@ -233,31 +258,32 @@ function LeadPanel({
       </header>
 
       <div className="space-y-5 p-5">
-        <div className="grid grid-cols-2 gap-2">
-          <MetricBox label="Qualify" value={row.qualificationScore} sub={`B${row.businessFit} / S${row.strategicFit}`} />
-          <MetricBox label="Confidence" value={row.confidence} sub="field completeness" />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <MetricBox
-            label="Similarity"
-            value={row.similarityScore ?? '—'}
-            sub="vs Ideal DNA"
-          />
-          <div className="flex items-center justify-center rounded-lg border border-slate-600 bg-[#1A2236] p-3">
+        <div className="grid grid-cols-3 gap-2">
+          <StatCard label="Qualify">
+            <span className="text-lg font-bold tabular-nums text-teal-400">
+              {row.qualificationScore}
+            </span>
+          </StatCard>
+          <StatCard label="Confidence">
+            <span className="text-lg font-bold tabular-nums text-blue-400">
+              {row.confidence}
+            </span>
+          </StatCard>
+          <StatCard label="Action">
             <RecBadge rec={row.recommendation} hard={row.hardExclusion} />
-          </div>
+          </StatCard>
         </div>
 
         <Section title="Company DNA">
-          <div className="flex flex-wrap gap-2">
-            {chips.length === 0 ? (
-              <span className="text-xs text-slate-500 italic">No DNA chips yet</span>
-            ) : (
-              chips.map((c) => (
-                <Chip key={`${c.label}-${c.full}`} label={c.label} value={c.value} full={c.full} />
-              ))
-            )}
-          </div>
+          {chips.length === 0 ? (
+            <span className="text-xs text-slate-500 italic">No DNA chips yet</span>
+          ) : (
+            <div className="grid grid-cols-2 gap-1.5">
+              {chips.map((c) => (
+                <DnaField key={`${c.label}-${c.full}`} label={c.label} value={c.value} />
+              ))}
+            </div>
+          )}
         </Section>
 
         <AiIntelligenceSection ai={ai} loading={loading} />
@@ -720,30 +746,62 @@ function Chip({
   );
 }
 
-function MetricBox({
+function StatCard({
   label,
-  value,
-  sub,
+  children,
 }: {
   label: string;
-  value: number | string;
-  sub?: string;
+  children: ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-slate-600 bg-[#1A2236] p-3 text-center">
-      <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="text-xl font-bold tabular-nums text-white">{value}</div>
-      {sub && <div className="text-[10px] text-slate-500">{sub}</div>}
+    <div className="rounded-lg border border-slate-700 bg-[#121826] p-2.5 text-center">
+      <div className="flex min-h-[28px] items-center justify-center">{children}</div>
+      <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-500">
+        {label}
+      </div>
     </div>
   );
 }
 
+function DnaField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-slate-700/80 bg-[#121826] px-2.5 py-2">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-slate-500">
+        {label}
+      </div>
+      <div className="mt-0.5 text-[12.5px] font-semibold leading-snug text-white">{value}</div>
+    </div>
+  );
+}
+
+function drawerInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function drawerAvatarTone(name: string): string {
+  const tones = [
+    'bg-gradient-to-br from-sky-500 to-cyan-500',
+    'bg-gradient-to-br from-indigo-500 to-violet-500',
+    'bg-gradient-to-br from-emerald-500 to-teal-500',
+    'bg-gradient-to-br from-purple-500 to-pink-500',
+    'bg-gradient-to-br from-amber-500 to-yellow-500',
+    'bg-gradient-to-br from-red-500 to-orange-500',
+  ] as const;
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return tones[h % tones.length];
+}
+
 function RecBadge({ rec, hard }: { rec: string; hard?: boolean }) {
+  // Soft-but-lively mockup .rec-* : translucent fill + colored border + colored text
   const map: Record<string, string> = {
-    CONTACT_NOW: 'bg-teal-500 text-teal-950',
-    RESEARCH_MORE: 'bg-amber-400 text-amber-950',
-    MONITOR: 'bg-slate-600 text-white',
-    REJECT: 'bg-rose-500 text-white',
+    CONTACT_NOW: 'bg-emerald-400/15 text-emerald-300 border border-emerald-400/40',
+    RESEARCH_MORE: 'bg-amber-400/15 text-amber-300 border border-amber-400/40',
+    MONITOR: 'bg-blue-500/15 text-sky-300 border border-blue-400/40',
+    REJECT: 'bg-rose-400/15 text-rose-300 border border-rose-400/35',
   };
   const labels: Record<string, string> = {
     CONTACT_NOW: 'CONTACT NOW',
@@ -754,8 +812,8 @@ function RecBadge({ rec, hard }: { rec: string; hard?: boolean }) {
   return (
     <span
       className={cn(
-        'rounded-md px-2.5 py-1.5 text-[11px] font-bold tracking-wide',
-        map[rec] ?? 'bg-slate-700 text-white',
+        'inline-block rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-[0.04em]',
+        map[rec] ?? 'bg-slate-700/60 text-slate-200 border border-slate-600',
       )}
     >
       {labels[rec] ?? rec}
