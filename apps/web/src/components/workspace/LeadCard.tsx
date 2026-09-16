@@ -121,7 +121,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
         }
       }}
       className={cn(
-        'relative flex flex-col gap-1 rounded-xl border p-4 text-left transition-all cursor-pointer outline-none',
+        'relative flex flex-col rounded-xl border p-3.5 text-left transition-all cursor-pointer outline-none',
         'focus-visible:ring-2 focus-visible:ring-teal-400/60',
         'bg-[#1A2236] hover:bg-[#1f2940]',
         selected
@@ -135,24 +135,56 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
           className="pointer-events-none absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-teal-400 animate-live-pulse"
         />
       )}
+      {/* Left stack (name → metrics) so Qualify height does not open a gap under the name */}
       <div className="flex items-start gap-3">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <span
-            className={cn(
-              'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold',
-              tone,
-            )}
-          >
-            {initials(row.company.name)}
-          </span>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-mono font-semibold text-[#D1D5DB]">#{rank}</span>
-              <span className="truncate text-sm font-semibold text-white">{row.company.name}</span>
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className={cn(
+                'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold',
+                tone,
+              )}
+            >
+              {initials(row.company.name)}
+            </span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-semibold text-[#D1D5DB]">#{rank}</span>
+                <span className="truncate text-sm font-semibold text-white">{row.company.name}</span>
+              </div>
+              <div className="truncate text-[11px] text-slate-400">
+                {[row.company.industry, row.company.geography].filter(Boolean).join(' · ') || '—'}
+              </div>
             </div>
-            <div className="truncate text-[11px] text-slate-400">
-              {[row.company.industry, row.company.geography].filter(Boolean).join(' · ') || '—'}
+          </div>
+
+          <div className="flex items-end justify-between gap-2">
+            <div className="flex gap-3">
+              <MetricRing
+                label="Similarity"
+                value={row.similarityScore}
+                accent="teal"
+                tooltip="How closely this lead matches Ideal DNA across weighted dimensions."
+              />
+              <MetricRing
+                label="Confidence"
+                value={row.confidence}
+                accent="blue"
+                tooltip="Scoring confidence = field completeness of company DNA. Not AI research confidence."
+              />
+              <MetricRing
+                label="Evidence"
+                value={Math.min(100, evidenceCount * 12)}
+                accent="amber"
+                tooltip={`${evidenceCount} evidence row${evidenceCount === 1 ? '' : 's'} from CSV / website research.`}
+              />
             </div>
+            <span
+              className="rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.04em] shrink-0"
+              style={rec.style}
+            >
+              {rec.label}
+            </span>
           </div>
         </div>
         <QualifyScore
@@ -162,37 +194,8 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
         />
       </div>
 
-      <div className="-mt-0.5 flex items-end justify-between gap-2">
-        <div className="flex gap-3">
-          <MetricRing
-            label="Similarity"
-            value={row.similarityScore}
-            accent="teal"
-            tooltip="How closely this lead matches Ideal DNA across weighted dimensions."
-          />
-          <MetricRing
-            label="Confidence"
-            value={row.confidence}
-            accent="blue"
-            tooltip="Scoring confidence = field completeness of company DNA. Not AI research confidence."
-          />
-          <MetricRing
-            label="Evidence"
-            value={Math.min(100, evidenceCount * 12)}
-            accent="amber"
-            tooltip={`${evidenceCount} evidence row${evidenceCount === 1 ? '' : 's'} from CSV / website research.`}
-          />
-        </div>
-        <span
-          className="rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.04em] shrink-0"
-          style={rec.style}
-        >
-          {rec.label}
-        </span>
-      </div>
-
       {chips.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
           {chips.map((c) => (
             <span
               key={`${c.label}-${c.full}`}
@@ -207,7 +210,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
 
       <div
         className={cn(
-          'flex items-start gap-1.5 text-[11px] leading-snug',
+          'mt-2.5 flex items-start gap-1.5 text-[11px] leading-snug',
           oneLiner.thin ? 'text-slate-500 italic' : 'text-teal-200/90',
         )}
       >
@@ -215,27 +218,29 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
         <span className="line-clamp-2">{oneLiner.text}</span>
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {hint && (
-          <span
-            title={hint.title}
-            className={cn(
-              'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium',
-              hint.kind === 'no_web'
-                ? 'bg-slate-700/80 text-slate-300'
-                : 'bg-[rgba(248,113,113,0.18)] text-[#f87171]',
-            )}
-          >
-            <AlertTriangle className="h-3 w-3" />
-            {hint.label}
-          </span>
-        )}
-        {(row.missingInformation?.length ?? 0) > 0 && !hint && (
-          <span className="rounded-md bg-slate-700/60 px-1.5 py-0.5 text-[10px] text-slate-400">
-            AI: missing info ({row.missingInformation.length})
-          </span>
-        )}
-      </div>
+      {(hint || (row.missingInformation?.length ?? 0) > 0) && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {hint && (
+            <span
+              title={hint.title}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium',
+                hint.kind === 'no_web'
+                  ? 'bg-slate-700/80 text-slate-300'
+                  : 'bg-[rgba(248,113,113,0.18)] text-[#f87171]',
+              )}
+            >
+              <AlertTriangle className="h-3 w-3" />
+              {hint.label}
+            </span>
+          )}
+          {(row.missingInformation?.length ?? 0) > 0 && !hint && (
+            <span className="rounded-md bg-slate-700/60 px-1.5 py-0.5 text-[10px] text-slate-400">
+              AI: missing info ({row.missingInformation.length})
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
