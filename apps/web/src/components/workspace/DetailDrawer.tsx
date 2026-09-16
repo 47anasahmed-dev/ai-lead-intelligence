@@ -28,12 +28,13 @@ import {
   extractWhyRanked,
   idealDnaChips,
   aiRiskHint,
+  isAiLeadPipelineRank,
   resolveAiResearch,
 } from '@/lib/aiSurfaces';
 import { cn } from '@/lib/utils';
 
 export type DrawerSelection =
-  | { mode: 'lead'; row: ResultRow }
+  | { mode: 'lead'; row: ResultRow; rank: number }
   | { mode: 'reference'; company: SearchRefCompany }
   | null;
 
@@ -135,6 +136,7 @@ export function DetailDrawer({ selection, searchId, onClose }: Props) {
         {onClose && <DrawerCloseBar onClose={onClose} />}
         <LeadPanel
           row={selection.row}
+          rank={selection.rank}
           detail={detail}
           loading={loading}
           error={error}
@@ -200,6 +202,7 @@ function EmptyState() {
 
 function LeadPanel({
   row,
+  rank,
   detail,
   loading,
   error,
@@ -209,6 +212,7 @@ function LeadPanel({
   onRefresh,
 }: {
   row: ResultRow;
+  rank: number;
   detail: CompanyDetail | null;
   loading: boolean;
   error: string | null;
@@ -246,6 +250,7 @@ function LeadPanel({
       : compactDnaChips(rawDna, { maxLen: 48, maxSegments: 2 });
   const evidence = detail?.evidence ?? row.evidence ?? [];
   const ai = buildLeadAiBundle(row, dna);
+  const inAiPipeline = isAiLeadPipelineRank(rank);
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
@@ -342,7 +347,7 @@ function LeadPanel({
 
         <RisksSection risks={[...ai.redFlags, ...ai.risks]} />
 
-        <AiIntelligenceSection ai={ai} loading={loading} />
+        <AiIntelligenceSection ai={ai} loading={loading} inAiPipeline={inAiPipeline} />
 
         <Section title={`Evidence (${evidence.length})`}>
           {loading && !evidence.length ? (
@@ -659,9 +664,11 @@ function buildLeadAiBundle(row: ResultRow, dna: CompanyDnaPayload | null): LeadA
 function AiIntelligenceSection({
   ai,
   loading,
+  inAiPipeline,
 }: {
   ai: LeadAiBundle;
   loading: boolean;
+  inAiPipeline: boolean;
 }) {
   const hint = aiRiskHint(ai.risks);
 
@@ -687,11 +694,15 @@ function AiIntelligenceSection({
                 </li>
               ))}
             </ul>
-          ) : (
+          ) : inAiPipeline ? (
             <p className="mt-1 text-xs text-[#9CA3AF] italic">
               {loading
                 ? 'Loading enrichment…'
                 : 'No AI fit narrative on this lead yet — awaiting evidence-locked OpenRouter narrative.'}
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-[#9CA3AF]">
+              Fit narratives run for the top 5 ranked leads only. Deterministic scores and explanations apply below.
             </p>
           )}
           {ai.fitPlaceholder && ai.positiveSignals[0] && (
@@ -759,8 +770,10 @@ function AiIntelligenceSection({
             </div>
           ) : ai.researchStatus ? (
             <p className="mt-1 text-xs text-[#9CA3AF]">AI research status: {ai.researchStatus}</p>
-          ) : (
+          ) : inAiPipeline ? (
             <p className="mt-1 text-xs text-[#9CA3AF] italic">Awaiting AI research…</p>
+          ) : (
+            <p className="mt-1 text-xs text-[#9CA3AF]">No AI research note on this lead.</p>
           )}
         </div>
 
@@ -784,7 +797,9 @@ function AiIntelligenceSection({
           Scoring confidence (card rings) = data completeness.
           {ai.aiResearchConfidence != null
             ? ` AI research confidence = ${ai.aiResearchConfidence}/100 (separate).`
-            : ' AI research confidence pending (separate from scoring).'}
+            : inAiPipeline
+              ? ' AI research confidence pending (separate from scoring).'
+              : ' AI research confidence not applicable outside top-5 pipeline.'}
         </p>
       </div>
     </Section>

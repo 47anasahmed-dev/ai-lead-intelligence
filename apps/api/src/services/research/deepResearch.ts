@@ -21,6 +21,8 @@ import {
 
 const MAX_SECTION_CHARS = 4_000;
 const MAX_TOTAL_CHARS = 14_000;
+/** Prefer About over thin JS homepage shells. */
+const THIN_HOMEPAGE_CHARS = 400;
 
 /** Wired system prompt for deep enrich AI calls (per product spec). */
 export const DEEP_ENRICH_SYSTEM_PROMPT = `You are a careful company research assistant. Use ONLY provided SOURCE TEXT. Prefer unknown over guess. evidenceQuote must be VERBATIM substring of SOURCE TEXT. Never invent LinkedIn/funding/facts from memory. Ignore demo_fit. Label findings by source (website|linkedin|about|news|mention). Return JSON matching ENRICHMENT_JSON_SCHEMA.`;
@@ -141,13 +143,13 @@ export async function collectDeepSourceSections(
   const notes: string[] = [];
   const origin = input.websiteUrl ? originFromWebsite(input.websiteUrl) : null;
 
-  // 1) Homepage
+  // 1) Homepage (may be deferred if thin — About prose preferred for JS shells)
+  let homeSection: SourceSection | null = null;
   if (input.websiteUrl) {
     const homeUrl = normalizeUrl(input.websiteUrl);
     if (homeUrl) {
-      const home = await fetchLabeled('website', homeUrl);
-      if (home) sections.push(home);
-      else notes.push('Homepage fetch failed or returned too little text');
+      homeSection = await fetchLabeled('website', homeUrl);
+      if (!homeSection) notes.push('Homepage fetch failed or returned too little text');
     } else {
       notes.push('Invalid or missing website URL');
     }
@@ -156,6 +158,7 @@ export async function collectDeepSourceSections(
   }
 
   // 2) LinkedIn (if present) — login wall → research note, no invented facts
+  let linkedinSection: SourceSection | null = null;
   if (input.linkedinUrl) {
     const liUrl = normalizeUrl(input.linkedinUrl);
     if (liUrl) {
@@ -169,11 +172,11 @@ export async function collectDeepSourceSections(
       } else {
         const text = fetched.text.slice(0, MAX_SECTION_CHARS);
         if (text.length >= 40) {
-          sections.push({
+          linkedinSection = {
             source: 'linkedin',
             url: fetched.finalUrl || liUrl,
             text,
-          });
+          };
         } else {
           notes.push('LinkedIn page had too little usable text');
         }
@@ -181,22 +184,31 @@ export async function collectDeepSourceSections(
     }
   }
 
-  // 3) Same-site about pages
+  // 3) Same-site about pages — prefer before thin homepage so Apple-style shells still get prose
+  const aboutSections: SourceSection[] = [];
   if (origin) {
-    const aboutPaths = ['/about', '/about-us', '/company'];
+    const aboutPaths = ['/about', '/about-us', '/company', '/our-story'];
     for (const path of aboutPaths) {
       const about = await fetchLabeled('about', `${origin}${path}`);
       if (about) {
-        // Dedupe near-identical about pages
-        const already = sections.some(
-          (s) =>
-            s.source === 'about' &&
-            s.text.slice(0, 200) === about.text.slice(0, 200),
+        const already = aboutSections.some(
+          (s) => s.text.slice(0, 200) === about.text.slice(0, 200),
         );
-        if (!already) sections.push(about);
+        if (!already) aboutSections.push(about);
       }
     }
   }
+
+  const homeThin =
+    !homeSection || homeSection.text.length < THIN_HOMEPAGE_CHARS;
+  if (homeThin && aboutSections.length) {
+    sections.push(...aboutSections);
+    if (homeSection) sections.push(homeSection);
+  } else {
+    if (homeSection) sections.push(homeSection);
+    sections.push(...aboutSections);
+  }
+  if (linkedinSection) sections.push(linkedinSection);
 
   // 4) Optional lightweight same-site news / mention HTML (no CAPTCHA scrapers)
   if (origin) {

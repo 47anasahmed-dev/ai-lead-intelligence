@@ -105,7 +105,7 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
     risksForHint.push(`AI research status: ${row.researchStatus}`);
   }
   const hint = aiRiskHint(risksForHint);
-  const oneLiner = leadAiOneLiner(row);
+  const oneLiner = leadAiOneLiner(row, { rank });
   const rec = recStyle(row.recommendation);
   const evidenceCount = row.evidence?.length ?? 0;
 
@@ -210,15 +210,17 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
         </div>
       )}
 
-      <div
-        className={cn(
-          'mt-3 flex items-start gap-1.5 text-[11px] leading-snug',
-          oneLiner.thin ? 'text-slate-500 italic' : 'text-teal-200/90',
-        )}
-      >
-        <Sparkles className="mt-0.5 h-3 w-3 shrink-0 opacity-70" />
-        <span className="line-clamp-2">{oneLiner.text}</span>
-      </div>
+      {oneLiner && (
+        <div
+          className={cn(
+            'mt-3 flex items-start gap-1.5 text-[11px] leading-snug',
+            oneLiner.thin ? 'text-slate-500 italic' : 'text-teal-200/90',
+          )}
+        >
+          <Sparkles className="mt-0.5 h-3 w-3 shrink-0 opacity-70" />
+          <span className="line-clamp-2">{oneLiner.text}</span>
+        </div>
+      )}
 
       {(hint || (row.missingInformation?.length ?? 0) > 0) && (
         <div className="mt-1.5 flex flex-wrap gap-1.5">

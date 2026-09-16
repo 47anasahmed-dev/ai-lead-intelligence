@@ -199,18 +199,21 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
   useEffect(() => {
     if (selection) return;
     if (ranked.length > 0) {
-      setSelection({ mode: 'lead', row: ranked[0] });
+      setSelection({ mode: 'lead', row: ranked[0], rank: 1 });
     }
   }, [ranked, selection]);
 
-  // Keep lead selection row fresh when polling updates scores
+  // Keep lead selection row fresh when polling updates scores / rank
   useEffect(() => {
     if (selection?.mode !== 'lead') return;
     const fresh = results.find((r) => r.companyId === selection.row.companyId);
-    if (fresh && fresh !== selection.row) {
-      setSelection({ mode: 'lead', row: fresh });
+    if (!fresh) return;
+    const rankIdx = ranked.findIndex((r) => r.companyId === fresh.companyId);
+    const rank = rankIdx >= 0 ? rankIdx + 1 : selection.rank;
+    if (fresh !== selection.row || rank !== selection.rank) {
+      setSelection({ mode: 'lead', row: fresh, rank });
     }
-  }, [results, selection]);
+  }, [results, ranked, selection]);
 
   const visible = useMemo(() => {
     if (pageSize === 'all') return ranked;
@@ -267,8 +270,8 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
     setDetailOpen(false);
   }
 
-  function openLead(row: ResultRow) {
-    setSelection({ mode: 'lead', row });
+  function openLead(row: ResultRow, rank: number) {
+    setSelection({ mode: 'lead', row, rank });
     setDetailOpen(true);
   }
 
@@ -429,7 +432,7 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
                     row={row}
                     rank={i + 1}
                     selected={selectedLeadId === row.companyId}
-                    onSelect={() => openLead(row)}
+                    onSelect={() => openLead(row, i + 1)}
                   />
                 ))}
               </div>

@@ -1,5 +1,5 @@
 import type { CompanyDna, CriteriaPayload, CsvCompanyRow, EvidenceItem } from './types.js';
-import { blankToNull, parseRevenue, parseYear } from './normalize.js';
+import { blankToNull, parseRevenue, parseYear, repairCsvLinkedInFields } from './normalize.js';
 
 function pushFact(
   facts: string[],
@@ -24,7 +24,8 @@ function pushFact(
  * Rules: facts from CSV only; inferences labeled; unknowns explicit; never invent.
  * demo_fit is stored in _meta only and MUST NOT be used for scoring.
  */
-export function buildCompanyDnaFromCsvRow(row: CsvCompanyRow): CompanyDna {
+export function buildCompanyDnaFromCsvRow(rawRow: CsvCompanyRow): CompanyDna {
+  const row = repairCsvLinkedInFields(rawRow);
   const companyId = blankToNull(row.company_id) ?? '';
   const name = blankToNull(row.company_name) ?? companyId;
   const website = blankToNull(row.website);

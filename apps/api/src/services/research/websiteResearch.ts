@@ -1,6 +1,7 @@
 /**
  * Lightweight website research: fetch → strip → structured AI → quote filter.
  * Never invents facts; evidenceQuote must be a verbatim substring of SOURCE TEXT.
+ * When homepage text is thin (JS shells), also try same-origin About pages.
  */
 
 import {
@@ -9,11 +10,15 @@ import {
   type AiProvider,
   type EnrichmentResult,
   type EvidenceItem,
+  type EvidenceSource,
 } from '@ali/shared';
 import { env } from '../../lib/env.js';
 
 const MAX_HTML_BYTES = 200_000;
 const MAX_TEXT_CHARS = 10_000;
+/** Homepage below this useful-char threshold → prefer About candidates. */
+const THIN_HOMEPAGE_CHARS = 400;
+const ABOUT_PATHS = ['/about', '/about-us', '/company', '/our-story'] as const;
 
 const ANTI_HALLUCINATION_SYSTEM = `You are a careful company research assistant.
 RULES (mandatory):
@@ -110,44 +115,59 @@ export async function fetchWebsiteText(url: string): Promise<{ text: string; fin
   }
 }
 
-export async function researchWebsite(
+function originFromUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Best-effort same-origin About page with the most useful prose.
+ * Bounded: stops after first solid hit; uses existing fetch timeouts.
+ */
+export async function fetchBestAboutText(
+  websiteUrl: string,
+): Promise<{ text: string; finalUrl: string } | null> {
+  const origin = originFromUrl(websiteUrl);
+  if (!origin) return null;
+  let best: { text: string; finalUrl: string } | null = null;
+  for (const path of ABOUT_PATHS) {
+    const fetched = await fetchWebsiteText(`${origin}${path}`);
+    if (!fetched) continue;
+    // Skip near-duplicates of a thin shell
+    if (!best || fetched.text.length > best.text.length + 80) {
+      best = fetched;
+    }
+    // Good enough About prose — stop early
+    if (fetched.text.length >= THIN_HOMEPAGE_CHARS) {
+      return fetched;
+    }
+  }
+  return best;
+}
+
+function enrichmentHasFindings(enrichment: EnrichmentResult): boolean {
+  return (
+    enrichment.filledUnknowns.length > 0 ||
+    enrichment.inferences.length > 0 ||
+    enrichment.narrativeBullets.length > 0 ||
+    enrichment.redFlags.length > 0
+  );
+}
+
+async function runAiOnSource(
   ai: AiProvider,
   input: WebsiteResearchInput,
+  sourceText: string,
+  finalUrl: string,
+  sourceLabel: EvidenceSource,
 ): Promise<WebsiteResearchOutput> {
-  const url = normalizeUrl(input.websiteUrl);
-  if (!url) {
-    return {
-      enrichment: emptyEnrichment(input.unknowns, 'Invalid or missing website URL'),
-      evidence: [],
-      sourceTextLength: 0,
-      skipped: 'invalid_url',
-    };
-  }
-
-  // Noop / disabled AI: skip network + model (deterministic path)
-  if (ai.name === 'noop') {
-    return {
-      enrichment: emptyEnrichment(input.unknowns, 'AI provider disabled (noop)'),
-      evidence: [],
-      sourceTextLength: 0,
-      skipped: 'ai_noop',
-    };
-  }
-
-  const fetched = await fetchWebsiteText(url);
-  if (!fetched) {
-    return {
-      enrichment: emptyEnrichment(input.unknowns, 'Website fetch failed'),
-      evidence: [],
-      sourceTextLength: 0,
-      skipped: 'fetch_failed',
-    };
-  }
-
-  const { text: sourceText, finalUrl } = fetched;
-
   const userPrompt = `Company ID: ${input.companyId}
 Website: ${finalUrl}
+Source label: ${sourceLabel}
 
 Known facts (do not contradict; do not overwrite):
 ${input.existingFacts.slice(0, 40).join('\n') || '(none)'}
@@ -183,20 +203,14 @@ evidenceQuote MUST be copied verbatim from SOURCE TEXT.`;
 
   const enrichment = sanitizeEnrichment(raw, sourceText);
 
-  const hasFindings =
-    enrichment.filledUnknowns.length > 0 ||
-    enrichment.inferences.length > 0 ||
-    enrichment.narrativeBullets.length > 0 ||
-    enrichment.redFlags.length > 0;
-
-  if (!hasFindings && !enrichment.researchNote) {
+  if (!enrichmentHasFindings(enrichment) && !enrichment.researchNote) {
     enrichment.researchNote = 'No usable findings after quote filter';
   }
 
   const evidence: EvidenceItem[] = enrichment.filledUnknowns.map((f) => ({
     field: f.field,
     value: f.value,
-    source: 'website' as const,
+    source: sourceLabel,
     url: finalUrl,
     evidenceQuote: f.evidenceQuote,
   }));
@@ -205,7 +219,7 @@ evidenceQuote MUST be copied verbatim from SOURCE TEXT.`;
     evidence.push({
       field: inf.field ?? 'inference',
       value: inf.text,
-      source: 'website',
+      source: sourceLabel,
       url: finalUrl,
       evidenceQuote: inf.evidenceQuote,
     });
@@ -216,4 +230,75 @@ evidenceQuote MUST be copied verbatim from SOURCE TEXT.`;
     evidence,
     sourceTextLength: sourceText.length,
   };
+}
+
+export async function researchWebsite(
+  ai: AiProvider,
+  input: WebsiteResearchInput,
+): Promise<WebsiteResearchOutput> {
+  const url = normalizeUrl(input.websiteUrl);
+  if (!url) {
+    return {
+      enrichment: emptyEnrichment(input.unknowns, 'Invalid or missing website URL'),
+      evidence: [],
+      sourceTextLength: 0,
+      skipped: 'invalid_url',
+    };
+  }
+
+  // Noop / disabled AI: skip network + model (deterministic path)
+  if (ai.name === 'noop') {
+    return {
+      enrichment: emptyEnrichment(input.unknowns, 'AI provider disabled (noop)'),
+      evidence: [],
+      sourceTextLength: 0,
+      skipped: 'ai_noop',
+    };
+  }
+
+  const home = await fetchWebsiteText(url);
+  const homeThin = !home || home.text.length < THIN_HOMEPAGE_CHARS;
+
+  // Prefer About when homepage is missing/thin (Apple-style JS shells)
+  let about: { text: string; finalUrl: string } | null = null;
+  if (homeThin || !home) {
+    about = await fetchBestAboutText(url);
+  }
+
+  let sourceText: string;
+  let finalUrl: string;
+  let sourceLabel: EvidenceSource;
+
+  if (about && (!home || about.text.length > home.text.length)) {
+    sourceText = about.text;
+    finalUrl = about.finalUrl;
+    sourceLabel = 'about';
+  } else if (home) {
+    sourceText = home.text;
+    finalUrl = home.finalUrl;
+    sourceLabel = 'website';
+  } else {
+    return {
+      enrichment: emptyEnrichment(input.unknowns, 'Website fetch failed'),
+      evidence: [],
+      sourceTextLength: 0,
+      skipped: 'fetch_failed',
+    };
+  }
+
+  let result = await runAiOnSource(ai, input, sourceText, finalUrl, sourceLabel);
+
+  // If homepage AI came back empty and we have not tried About yet, fetch About and retry
+  if (
+    sourceLabel === 'website' &&
+    !enrichmentHasFindings(result.enrichment) &&
+    result.skipped !== 'ai_error'
+  ) {
+    about = about ?? (await fetchBestAboutText(url));
+    if (about && about.text.length >= 80) {
+      result = await runAiOnSource(ai, input, about.text, about.finalUrl, 'about');
+    }
+  }
+
+  return result;
 }
