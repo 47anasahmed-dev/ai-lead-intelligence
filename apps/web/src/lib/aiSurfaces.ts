@@ -3,6 +3,14 @@
  * Never invent narrative client-side.
  */
 
+/** Hard top-K for deep enrich + Ideal DNA fit narratives (matches API DEEP_ENRICH_TOP_K). */
+export const AI_LEAD_PIPELINE_TOP_K = 5;
+
+/** True when this display/API rank is in the AI deep-enrich / fit-narrative pipeline. */
+export function isAiLeadPipelineRank(rank: number | null | undefined): boolean {
+  return typeof rank === 'number' && rank >= 1 && rank <= AI_LEAD_PIPELINE_TOP_K;
+}
+
 export type AiRiskHint = { label: string; title: string; kind: 'no_web' | 'risk' | 'other' };
 
 export function aiRiskHint(risks: string[]): AiRiskHint | null {
@@ -74,18 +82,24 @@ export function extractAiResearchFromInferences(inferences: string[] | undefined
 
 /**
  * Short card one-liner from real fields only.
- * Priority: AI narrative → positive signal → risk hint → thin/awaiting state.
+ * Priority: AI narrative → positive signal → risk hint → research status → why-ranked.
+ * Awaiting/pending AI chrome only when rank is in the top-K AI pipeline.
  */
-export function leadAiOneLiner(row: {
-  positiveSignals?: string[];
-  risks?: string[];
-  similarityExplanation?: string[];
-  missingInformation?: string[];
-  aiFitNarrative?: string | null;
-  aiFitNarrativeThin?: boolean;
-  researchStatus?: string | null;
-  researchNote?: string | null;
-}): { text: string; thin: boolean } {
+export function leadAiOneLiner(
+  row: {
+    positiveSignals?: string[];
+    risks?: string[];
+    similarityExplanation?: string[];
+    missingInformation?: string[];
+    aiFitNarrative?: string | null;
+    aiFitNarrativeThin?: boolean;
+    researchStatus?: string | null;
+    researchNote?: string | null;
+  },
+  opts?: { rank?: number | null },
+): { text: string; thin: boolean } | null {
+  const inPipeline = isAiLeadPipelineRank(opts?.rank);
+
   if (row.aiFitNarrative?.trim()) {
     const thin =
       row.aiFitNarrativeThin === true ||
@@ -110,10 +124,22 @@ export function leadAiOneLiner(row: {
     return { text: `AI research: ${row.researchStatus}`, thin: true };
   }
 
-  if ((row.missingInformation?.length ?? 0) > 0) {
+  if (row.researchNote?.trim()) {
+    return { text: truncate(row.researchNote, 110), thin: false };
+  }
+
+  const why = extractWhyRanked(row.similarityExplanation);
+  if (why[0]) return { text: truncate(why[0], 110), thin: false };
+
+  // Only show awaiting stubs when this lead is actually in the top-K AI pipeline.
+  if (inPipeline) {
+    if ((row.missingInformation?.length ?? 0) > 0) {
+      return { text: 'Awaiting AI research…', thin: true };
+    }
     return { text: 'Awaiting AI research…', thin: true };
   }
-  return { text: 'Awaiting AI research…', thin: true };
+
+  return null;
 }
 
 /** Prefer typed result fields, fall back to parsing inference stamps. */

@@ -136,15 +136,21 @@ Company detail and search results return `evidence[]` with `field`, `value`, `so
 
 ## AI Lead Intelligence fields (additive)
 
-After deterministic scoring marks the search `completed`, a timed AI intelligence pass (when `AI_PROVIDER` is live) may attach:
+After deterministic scoring marks the search `completed` (when `AI_PROVIDER` is live):
+
+1. **Deep enrich** the hard top-**K=5** leads by qualification rank (richer multi-source DNA).
+2. **Ideal DNA summary** once per search (ICP strip prose from refs + centroid).
+3. **Fit narratives** only for that same top-**K=5** (evidence-locked; scores unchanged). Ranks 6+ keep deterministic explanations only — no Ideal-DNA-match / fit narrative LLM pass.
+
+`ENRICH_MAX_CANDIDATES` (default 15) only caps optional `ENRICH_ON_SEARCH` unstamped fills — it does **not** control fit-narrative count.
 
 | Field | Where | Notes |
 |---|---|---|
-| `aiFitNarrative` | each `/results` row | 2–4 sentence why-this-lead vs Ideal DNA; evidence-locked. Thin/empty research → honest thin status, not invented prose. Also mirrored as `AI narrative:` lines in `similarityExplanation`. |
+| `aiFitNarrative` | top-5 `/results` rows | 2–4 sentence why-this-lead vs Ideal DNA; evidence-locked. Thin/empty research → honest thin status, not invented prose. Also mirrored as `AI narrative:` lines in `similarityExplanation`. Not generated for ranks 6+. |
 | `aiFitNarrativeThin` | each `/results` row | `true` when narrative is a thin/awaiting stub |
 | `inferences` | each `/results` row | DNA inference stamps (incl. `AI research status:`, `AI research:`, `AI red flag:`) so UI does not need a second `getCompany` |
 | `researchNote` / `researchStatus` / `redFlags` | each `/results` row | Typed parses of the stamps above |
 | `aiResearchConfidence` | each `/results` row | 0–100 or `null` — **distinct** from scoring `confidence` (data completeness) |
-| `idealDnaSummary` | `meta` on `/results`, also on `GET /searches/:id` | LLM Ideal DNA prose from reference DNAs + centroid; also stored on `idealDna.idealDnaSummary` |
+| `idealDnaSummary` | `meta` on `/results`, also on `GET /searches/:id` | LLM Ideal DNA prose **once per search** from reference DNAs + centroid; also stored on `idealDna.idealDnaSummary` |
 
 Deterministic `similarityScore` / `qualificationScore` / `confidence` are unchanged. `demo_fit` is never used for scoring.
