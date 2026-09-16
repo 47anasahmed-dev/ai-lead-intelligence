@@ -11,20 +11,25 @@ import {
   type AiProvider,
   type GenerateStructuredParams,
 } from '@ali/shared';
+import { env } from '../../lib/env.js';
 
 export interface OpenAiConfig {
   apiKey: string;
   model: string;
+  /** Per-request AbortSignal timeout in ms (default from env / 25000) */
+  timeoutMs?: number;
 }
 
 export class OpenAiProvider implements AiProvider {
   readonly name = 'openai';
   private readonly apiKey: string;
   private readonly model: string;
+  private readonly timeoutMs: number;
 
   constructor(cfg: OpenAiConfig) {
     this.apiKey = cfg.apiKey;
     this.model = cfg.model;
+    this.timeoutMs = cfg.timeoutMs ?? env.openAiTimeoutMs;
   }
 
   async generateStructured<T>(params: GenerateStructuredParams): Promise<T> {
@@ -36,22 +41,38 @@ export class OpenAiProvider implements AiProvider {
 
       const user = `${params.userPrompt}\n\nJSON schema (follow exactly):\n${JSON.stringify(params.schema, null, 2)}`;
 
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          temperature: 0,
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: system },
-            { role: 'user', content: user },
-          ],
-        }),
-      });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+      let res: Response;
+      try {
+        res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            temperature: 0,
+            response_format: { type: 'json_object' },
+            messages: [
+              { role: 'system', content: system },
+              { role: 'user', content: user },
+            ],
+          }),
+          signal: controller.signal,
+        });
+      } catch (err) {
+        if (
+          (err instanceof Error && err.name === 'AbortError') ||
+          (typeof DOMException !== 'undefined' && err instanceof DOMException && err.name === 'AbortError')
+        ) {
+          throw new Error(`OpenAI request timed out after ${this.timeoutMs}ms`);
+        }
+        throw err;
+      } finally {
+        clearTimeout(timer);
+      }
 
       if (!res.ok) {
         const body = await res.text().catch(() => '');

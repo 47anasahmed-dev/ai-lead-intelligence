@@ -7,10 +7,16 @@ function pushFact(
   field: string,
   value: string | null,
   label: string,
+  url?: string | null,
 ): void {
   if (!value) return;
   facts.push(label);
-  evidence.push({ field, value, source: 'csv' });
+  evidence.push({
+    field,
+    value,
+    source: 'csv',
+    ...(url ? { url } : {}),
+  });
 }
 
 /**
@@ -41,6 +47,7 @@ export function buildCompanyDnaFromCsvRow(row: CsvCompanyRow): CompanyDna {
   const state = blankToNull(row.state);
   const keyServices = blankToNull(row.key_services);
   const demoFit = blankToNull(row.demo_fit);
+  const linkedinUrl = blankToNull(row.linkedin_url);
 
   const facts: string[] = [];
   const inferences: string[] = [];
@@ -74,7 +81,15 @@ export function buildCompanyDnaFromCsvRow(row: CsvCompanyRow): CompanyDna {
     evidence.push({ field: 'founded_year', value: String(foundedYear), source: 'csv' });
   }
   pushFact(facts, evidence, 'company_description', description, `Description present`);
-  pushFact(facts, evidence, 'website', website, `Website: ${website}`);
+  pushFact(facts, evidence, 'website', website, `Website: ${website}`, website);
+  pushFact(
+    facts,
+    evidence,
+    'linkedin_url',
+    linkedinUrl,
+    `LinkedIn: ${linkedinUrl}`,
+    linkedinUrl,
+  );
 
   // Labeled inferences only (derived from present facts — not invented attributes)
   if (businessModel && /saas/i.test(businessModel)) {

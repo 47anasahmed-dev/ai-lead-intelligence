@@ -395,3 +395,67 @@ describe('enrichment quote filter', () => {
     expect(p.name).toBe('noop');
   });
 });
+
+describe('AI research stamps affect qualification', () => {
+  it('empty AI research status adds risk and lowers score/confidence vs twin', () => {
+    const ideal = buildCompanyDnaFromCsvRow(row({ company_id: 'R1', company_name: 'Ref' }));
+    const base = buildCompanyDnaFromCsvRow(row({ company_id: 'C1', company_name: 'Twin' }));
+    const emptyTwin = structuredClone(base);
+    emptyTwin.inferences = [
+      ...emptyTwin.inferences,
+      'AI research status: empty',
+      'AI research: No usable findings after quote filter',
+    ];
+    // DNA confidence already lowered by enrich path; mirror a modest drop
+    emptyTwin.confidence = Math.max(10, base.confidence - 10);
+
+    const simBase = similarityScore(ideal, base);
+    const simEmpty = similarityScore(ideal, emptyTwin);
+    const qBase = qualificationScore(ideal, base, simBase);
+    const qEmpty = qualificationScore(ideal, emptyTwin, simEmpty);
+
+    expect(qEmpty.risks.some((r) => /no usable company information/i.test(r))).toBe(true);
+    expect(qEmpty.missingInformation.some((m) => /No usable findings/i.test(m))).toBe(true);
+    expect(qEmpty.qualificationScore).toBeLessThan(qBase.qualificationScore);
+    expect(qEmpty.qualificationScore).toBe(qBase.qualificationScore - 8);
+    expect(qEmpty.confidence).toBeLessThan(qBase.confidence);
+  });
+
+  it('AI red flag adds risk and lowers qualificationScore', () => {
+    const ideal = buildCompanyDnaFromCsvRow(row({ company_id: 'R1', company_name: 'Ref' }));
+    const base = buildCompanyDnaFromCsvRow(row({ company_id: 'C1', company_name: 'Twin' }));
+    const flagged = structuredClone(base);
+    flagged.inferences = [
+      ...flagged.inferences,
+      'AI research status: ok',
+      'AI red flag: Company announced shutdown of commercial product',
+    ];
+
+    const simBase = similarityScore(ideal, base);
+    const simFlag = similarityScore(ideal, flagged);
+    const qBase = qualificationScore(ideal, base, simBase);
+    const qFlag = qualificationScore(ideal, flagged, simFlag);
+
+    expect(qFlag.risks.some((r) => /AI red flag:.*shutdown/i.test(r))).toBe(true);
+    expect(qFlag.qualificationScore).toBe(qBase.qualificationScore - 8);
+    expect(qFlag.confidence).toBeLessThanOrEqual(qBase.confidence - 5);
+  });
+
+  it('sanitizeEnrichment keeps redFlags and researchNote', async () => {
+    const { sanitizeEnrichment } = await import('./aiProvider.js');
+    const source = 'Acme HVAC serves hospitals. The firm faces a pending lawsuit over contracts.';
+    const sanitized = sanitizeEnrichment(
+      {
+        inferences: [],
+        filledUnknowns: [],
+        narrativeBullets: [],
+        unknownsRemaining: [],
+        redFlags: [' pending lawsuit over contracts ', '', 'x'.repeat(5)],
+        researchNote: ' Limited product detail on homepage ',
+      },
+      source,
+    );
+    expect(sanitized.redFlags).toEqual(['pending lawsuit over contracts', 'xxxxx']);
+    expect(sanitized.researchNote).toBe('Limited product detail on homepage');
+  });
+});

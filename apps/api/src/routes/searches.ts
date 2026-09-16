@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { env } from '../lib/env.js';
+import { resolveEvidence } from '../lib/evidence.js';
+import { companyToDna } from '../services/companyMapper.js';
 import { runSearchAnalysis } from '../services/analysis.js';
 
 async function getDemoUserId() {
@@ -20,7 +22,19 @@ export async function searchRoutes(app: FastifyInstance) {
       orderBy: { createdAt: 'desc' },
       take: 20,
       include: {
-        references: { include: { company: { select: { id: true, name: true } } } },
+        references: {
+          include: {
+            company: {
+              select: {
+                id: true,
+                name: true,
+                industry: true,
+                website: true,
+                linkedinUrl: true,
+              },
+            },
+          },
+        },
         _count: { select: { qualifications: true } },
       },
     });
@@ -110,17 +124,19 @@ export async function searchRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: `Unsupported search type: ${search.type}` });
     }
 
-    const result = await runSearchAnalysis(id);
-    return {
-      data: {
-        searchId: id,
-        status: 'completed',
-        idealDna: result.idealDna,
-        candidateCount: result.candidateCount,
-        filteredCount: result.filteredCount,
-        topResults: result.results.slice(0, 25),
-      },
-    };
+    if (search.status === 'running') {
+      return reply.code(202).send({
+        data: { searchId: id, status: 'running', started: false },
+      });
+    }
+
+    void runSearchAnalysis(id).catch((err) => {
+      console.error(`[searches] runSearchAnalysis(${id}) failed:`, err);
+    });
+
+    return reply.code(202).send({
+      data: { searchId: id, status: 'running', started: true },
+    });
   });
 
   app.get('/searches/:id', async (req, reply) => {
@@ -128,7 +144,19 @@ export async function searchRoutes(app: FastifyInstance) {
     const search = await prisma.search.findUnique({
       where: { id },
       include: {
-        references: { include: { company: { select: { id: true, name: true, industry: true } } } },
+        references: {
+          include: {
+            company: {
+              select: {
+                id: true,
+                name: true,
+                industry: true,
+                website: true,
+                linkedinUrl: true,
+              },
+            },
+          },
+        },
       },
     });
     if (!search) return reply.code(404).send({ error: 'Search not found' });
@@ -139,7 +167,7 @@ export async function searchRoutes(app: FastifyInstance) {
     const { id } = z.object({ id: z.string() }).parse(req.params);
     const query = z
       .object({
-        limit: z.coerce.number().int().min(1).max(500).default(100),
+        limit: z.coerce.number().int().min(1).max(500).default(5),
         recommendation: z
           .enum(['CONTACT_NOW', 'RESEARCH_MORE', 'MONITOR', 'REJECT'])
           .optional(),
@@ -166,6 +194,7 @@ export async function searchRoutes(app: FastifyInstance) {
             employeeRange: true,
             ownership: true,
             website: true,
+            linkedinUrl: true,
           },
         },
       },
@@ -180,8 +209,43 @@ export async function searchRoutes(app: FastifyInstance) {
       sims.map((s) => [s.companyId, s]),
     );
 
+    const companyIds = quals.map((q) => q.companyId);
+    const [profiles, tableEvidenceRows, fullCompanies] = await Promise.all([
+      prisma.companyProfile.findMany({ where: { companyId: { in: companyIds } } }),
+      prisma.evidence.findMany({
+        where: { companyId: { in: companyIds } },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.company.findMany({ where: { id: { in: companyIds } } }),
+    ]);
+    const profileById = new Map(profiles.map((p) => [p.companyId, p]));
+    const evidenceById = new Map<string, typeof tableEvidenceRows>();
+    for (const row of tableEvidenceRows) {
+      const list = evidenceById.get(row.companyId) ?? [];
+      if (list.length < 50) list.push(row);
+      evidenceById.set(row.companyId, list);
+    }
+    const fullById = new Map(fullCompanies.map((c) => [c.id, c]));
+
     const data = quals.map((q) => {
       const sim = simByCompany.get(q.companyId);
+      const full = fullById.get(q.companyId);
+      const liveDna = full ? companyToDna(full) : null;
+      const profile = profileById.get(q.companyId);
+      const dna = (profile?.dna as { evidence?: unknown } | undefined) ?? liveDna;
+      const evidence = resolveEvidence(
+        evidenceById.get(q.companyId) ?? [],
+        dna as {
+          evidence?: Array<{
+            field: string;
+            value: string;
+            source: string;
+            url?: string;
+            evidenceQuote?: string;
+          }>;
+        } | null,
+        liveDna?.evidence,
+      );
       return {
         companyId: q.companyId,
         company: q.company,
@@ -197,6 +261,7 @@ export async function searchRoutes(app: FastifyInstance) {
         similarityScore: sim?.overallScore ?? null,
         similarityDimensions: sim?.dimensions ?? null,
         similarityExplanation: sim?.explanation ?? [],
+        evidence,
       };
     });
 
@@ -225,7 +290,7 @@ export async function searchRoutes(app: FastifyInstance) {
     const company = await prisma.company.findUnique({ where: { id: params.companyId } });
     if (!company) return reply.code(404).send({ error: 'Company not found' });
 
-    const [qualification, similarity, profile, evidence] = await Promise.all([
+    const [qualification, similarity, profile, tableEvidence] = await Promise.all([
       prisma.qualification.findUnique({
         where: {
           searchId_companyId: { searchId: params.id, companyId: params.companyId },
@@ -244,6 +309,22 @@ export async function searchRoutes(app: FastifyInstance) {
       }),
     ]);
 
+    const liveDna = companyToDna(company);
+    const dna = profile?.dna ?? liveDna;
+    const evidence = resolveEvidence(
+      tableEvidence,
+      dna as {
+        evidence?: Array<{
+          field: string;
+          value: string;
+          source: string;
+          url?: string;
+          evidenceQuote?: string;
+        }>;
+      },
+      liveDna.evidence,
+    );
+
     const { demoFit: _demoFit, rawData: _raw, ...publicCompany } = company;
 
     return {
@@ -252,7 +333,7 @@ export async function searchRoutes(app: FastifyInstance) {
         searchStatus: search.status,
         idealDna: search.idealDna,
         company: publicCompany,
-        dna: profile?.dna ?? null,
+        dna,
         evidence,
         qualification,
         similarity: similarity

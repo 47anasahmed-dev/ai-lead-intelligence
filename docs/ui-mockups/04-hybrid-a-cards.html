@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup Hybrid A+C — Cards in Split Workspace · AI Lead Intelligence</title>
+<!--
+  IA TRADEOFF (Hybrid A+C): Keep A's 3-pane ops console (left refs + recent,
+  always-on right DNA/evidence drawer) but replace the dense table with C-style
+  company cards + triple metric rings. Best of both: peripheral Ideal DNA/refs
+  and rich card scan; page-size control keeps the center from feeling crowded.
+-->
+<style>
+  :root {
+    --bg: #121826;
+    --bg-elev: #1A2236;
+    --bg-panel: #232B3E;
+    --bg-hover: #2a3348;
+    --border: #2d3748;
+    --border-soft: #252d3d;
+    --text: #FFFFFF;
+    --muted: #D1D5DB;
+    --faint: #9CA3AF;
+    --teal: #2DD4BF;
+    --teal-solid: #14B8A6;
+    --teal-dim: rgba(20, 184, 166, 0.15);
+    --teal-border: rgba(20, 184, 166, 0.4);
+    --navy: #0f2744;
+    --accent: #3B82F6;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --ok: #34d399;
+    --purple: #a78bfa;
+    --radius: 10px;
+    --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font);
+    background: linear-gradient(180deg, #1A1F2E 0%, #0A0F1C 100%);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 13px;
+    line-height: 1.45;
+    overflow: hidden;
+  }
+  button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  a { color: var(--teal); }
+
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 48px; padding: 0 16px;
+    background: linear-gradient(180deg, #1A1F2E 0%, #0A0F1C 100%);
+    border-bottom: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; letter-spacing: -0.02em; }
+  .logo {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: linear-gradient(135deg, #14b8a6, #0ea5e9);
+    display: grid; place-items: center; font-size: 12px; font-weight: 800; color: #042f2e;
+  }
+  .mockup-label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--teal); background: var(--teal-dim); border: 1px solid var(--teal-border);
+    padding: 4px 10px; border-radius: 999px;
+  }
+  .btn-run {
+    position: relative;
+    background: linear-gradient(135deg, #14B8A6, #0d9488);
+    color: #042f2e; font-weight: 700; padding: 8px 18px; border-radius: 8px;
+    box-shadow: 0 0 0 1px rgba(45,212,191,0.3), 0 4px 14px rgba(13,148,136,0.35);
+    animation: runPulse 2.8s ease-in-out infinite;
+    transition: filter 0.2s, transform 0.15s;
+  }
+  .btn-run:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  .btn-run:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn-run:active { transform: translateY(0); }
+  @keyframes runPulse {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(45,212,191,0.3), 0 4px 14px rgba(13,148,136,0.35); }
+    50% { box-shadow: 0 0 0 3px rgba(45,212,191,0.45), 0 6px 20px rgba(13,148,136,0.5); }
+  }
+
+  .workspace {
+    display: grid;
+    grid-template-columns: 220px 1fr 340px;
+    height: calc(100vh - 48px);
+    max-width: 1440px; margin: 0 auto;
+  }
+  .pane {
+    border-right: 1px solid var(--border-soft);
+    background: var(--bg-elev);
+  }
+  .pane:last-child { border-right: none; background: var(--bg-panel); }
+
+  /* Left rail — scrolls independently if needed, but short content */
+  .rail {
+    overflow: auto;
+  }
+  .rail-section { padding: 14px 12px; border-bottom: 1px solid var(--border-soft); }
+  .rail-h {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--faint); margin-bottom: 10px;
+  }
+  .ref-card {
+    display: flex; gap: 10px; align-items: center;
+    padding: 8px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--bg-panel); margin-bottom: 8px;
+    transition: border-color 0.2s, background 0.2s, transform 0.2s;
+  }
+  .ref-card:hover { transform: translateX(2px); border-color: var(--teal-border); }
+  .ref-card.active { border-color: var(--teal-border); background: var(--teal-dim); }
+  .avatar {
+    width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+    display: grid; place-items: center; font-weight: 800; font-size: 11px; color: #fff;
+  }
+  .av-sm { width: 36px; height: 36px; border-radius: 9px; font-size: 12px; }
+  .av-adept { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+  .av-bd { background: linear-gradient(135deg, #ef4444, #f97316); }
+  .av-fig { background: linear-gradient(135deg, #0ea5e9, #06b6d4); }
+  .av-cov { background: linear-gradient(135deg, #10b981, #14b8a6); }
+  .av-vic { background: linear-gradient(135deg, #a855f7, #ec4899); }
+  .av-soft { background: linear-gradient(135deg, #64748b, #94a3b8); }
+  .av-path { background: linear-gradient(135deg, #f59e0b, #eab308); }
+  .av-agi { background: linear-gradient(135deg, #3b82f6, #6366f1); }
+  .ref-meta { min-width: 0; }
+  .ref-name { font-weight: 650; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ref-sub { color: var(--muted); font-size: 11px; }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    font-size: 11px; padding: 4px 9px; border-radius: 999px;
+    background: var(--bg-hover); border: 1px solid var(--border); color: var(--muted);
+    cursor: pointer; transition: border-color 0.15s, color 0.15s, background 0.15s;
+  }
+  .chip:hover, .chip:focus-visible { border-color: var(--teal-border); color: var(--text); outline: none; }
+  .chip.active { background: var(--teal-dim); border-color: var(--teal-border); color: var(--teal); }
+
+  /* Center — only this pane scrolls for cards */
+  .center {
+    display: flex; flex-direction: column; min-width: 0;
+    background: #181E2A; overflow: hidden;
+  }
+  .dna-strip {
+    flex-shrink: 0;
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 12px 14px; border-bottom: 1px solid var(--border-soft);
+    background: linear-gradient(90deg, rgba(20,184,166,0.08), transparent 60%);
+  }
+  .dna-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--teal); margin-right: 4px; }
+  .dna-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px; border-radius: 8px;
+    background: var(--bg-panel); border: 1px solid var(--border);
+    font-size: 12px; font-weight: 550;
+  }
+  .dna-pill .k { color: var(--faint); font-weight: 500; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .cards-toolbar {
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 10px 14px; border-bottom: 1px solid var(--border-soft);
+  }
+  .toolbar-left { font-size: 11px; color: var(--faint); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+  .toolbar-left strong { color: var(--muted); font-weight: 700; }
+  .page-size {
+    display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted);
+  }
+  .page-size label { font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 650; }
+  .page-size select {
+    appearance: none;
+    background: var(--bg-panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 5px 28px 5px 10px; font: inherit; font-weight: 650;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239CA3AF' d='M3 4.5L6 8l3-3.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 8px center;
+    cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .page-size select:hover, .page-size select:focus-visible {
+    border-color: var(--teal-border); outline: none;
+    box-shadow: 0 0 0 2px rgba(20,184,166,0.2);
+  }
+
+  .cards-scroll {
+    flex: 1; overflow-y: auto; overflow-x: hidden;
+    padding: 12px 14px 16px;
+    scroll-behavior: smooth;
+  }
+  .cards-scroll::-webkit-scrollbar { width: 8px; }
+  .cards-scroll::-webkit-scrollbar-track { background: transparent; }
+  .cards-scroll::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 999px; }
+  .cards-scroll::-webkit-scrollbar-thumb:hover { background: #3d4a5f; }
+
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+    transition: opacity 0.25s ease;
+  }
+  .cards-grid.paging { opacity: 0.45; transform: translateY(4px); }
+  .cards-grid { transition: opacity 0.28s ease, transform 0.28s ease; }
+
+  /* Company cards */
+  .lead-card {
+    display: block; width: 100%; text-align: left;
+    background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px; position: relative;
+    transition:
+      border-color 0.22s ease,
+      box-shadow 0.22s ease,
+      transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+      background 0.22s ease;
+  }
+  .lead-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(20,184,166,0.45);
+    box-shadow: 0 0 0 1px rgba(20,184,166,0.2), 0 12px 28px rgba(0,0,0,0.4), 0 0 24px rgba(20,184,166,0.12);
+  }
+  .lead-card.selected {
+    border-color: rgba(45,212,191,0.65);
+    background: linear-gradient(160deg, rgba(20,184,166,0.14), rgba(26,34,54,0.95) 55%);
+    box-shadow:
+      inset 3px 0 0 var(--teal),
+      0 0 0 1px rgba(45,212,191,0.35),
+      0 14px 32px rgba(0,0,0,0.4),
+      0 0 28px rgba(20,184,166,0.18);
+    transform: translateY(-2px);
+  }
+  .lead-card.selected::after {
+    content: "";
+    position: absolute; top: 10px; right: 10px;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--teal);
+    box-shadow: 0 0 0 0 rgba(45,212,191,0.6);
+    animation: livePulse 1.6s ease-out infinite;
+  }
+  @keyframes livePulse {
+    0% { box-shadow: 0 0 0 0 rgba(45,212,191,0.55); }
+    70% { box-shadow: 0 0 0 10px rgba(45,212,191,0); }
+    100% { box-shadow: 0 0 0 0 rgba(45,212,191,0); }
+  }
+  .lead-card:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+
+  .lead-top { display: flex; gap: 12px; align-items: flex-start; }
+  .lead-meta { flex: 1; min-width: 0; }
+  .lead-name { font-weight: 750; font-size: 14.5px; letter-spacing: -0.01em; }
+  .lead-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .badge { font-size: 10px; font-weight: 650; padding: 2px 6px; border-radius: 4px; }
+  .badge-risk { background: rgba(248,113,113,0.18); color: var(--danger); }
+  .badge-noweb { background: rgba(167,139,250,0.15); color: var(--purple); }
+  .rec {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 3px 7px; border-radius: 6px; display: inline-block; margin-top: 8px;
+  }
+  .rec-contact { background: rgba(52,211,153,0.15); color: var(--ok); border: 1px solid rgba(52,211,153,0.35); }
+  .rec-research { background: rgba(251,191,36,0.12); color: var(--warn); border: 1px solid rgba(251,191,36,0.35); }
+  .rec-monitor { background: rgba(59,130,246,0.15); color: #93c5fd; border: 1px solid rgba(59,130,246,0.35); }
+  .rec-reject { background: rgba(248,113,113,0.12); color: var(--danger); border: 1px solid rgba(248,113,113,0.3); }
+
+  /* Triple metric rings */
+  .metrics {
+    display: flex; gap: 10px; align-items: flex-start; justify-content: flex-start;
+    margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-soft);
+  }
+  .metric {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    position: relative; flex: 1; min-width: 0;
+  }
+  .metric-label {
+    font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--faint); cursor: help; border-bottom: 1px dotted transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .metric-label:hover, .metric-label:focus-visible {
+    color: var(--muted); border-bottom-color: var(--faint); outline: none;
+  }
+  .ring-wrap {
+    position: relative; width: 48px; height: 48px; flex-shrink: 0;
+  }
+  .ring-wrap svg { transform: rotate(-90deg); }
+  .ring-wrap .num {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    font-family: var(--mono); font-weight: 750; font-size: 12px;
+  }
+  .hi { color: var(--ok); }
+  .mid { color: var(--warn); }
+  .lo { color: var(--faint); }
+  .conf-num { color: #93c5fd; }
+  .evid-num { color: var(--text); }
+
+  .ring-progress {
+    transition: stroke-dasharray 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .lead-card.selected .ring-progress {
+    animation: ringDraw 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  @keyframes ringDraw {
+    from { stroke-dasharray: 0 999; }
+  }
+
+  /* Tooltips */
+  .tip {
+    position: absolute; bottom: calc(100% + 8px); left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    min-width: 160px; max-width: 200px;
+    padding: 8px 10px; border-radius: 8px;
+    background: #0c1220; border: 1px solid var(--teal-border);
+    color: var(--muted); font-size: 11px; font-weight: 500; line-height: 1.4;
+    text-align: center; letter-spacing: 0; text-transform: none;
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+    z-index: 20; box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  }
+  .tip::after {
+    content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    border: 6px solid transparent; border-top-color: var(--teal-border);
+  }
+  .metric:hover .tip,
+  .metric:focus-within .tip,
+  .metric-label:focus-visible + .ring-wrap .tip,
+  .metric.show-tip .tip {
+    opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0);
+  }
+
+  .snippets { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .snip {
+    font-size: 12px; font-style: italic; color: var(--muted);
+    background: #181E2A; border-left: 3px solid var(--teal-solid);
+    padding: 6px 8px; border-radius: 0 6px 6px 0; line-height: 1.35;
+  }
+  .snip a {
+    font-style: normal; font-size: 10px; margin-left: 4px; text-decoration: none;
+    opacity: 0.85; transition: opacity 0.15s;
+  }
+  .snip a:hover { opacity: 1; text-decoration: underline; }
+
+  /* Right drawer */
+  .drawer {
+    padding: 14px; display: flex; flex-direction: column; gap: 14px;
+    overflow: auto;
+    transition: box-shadow 0.35s ease;
+  }
+  .drawer.live-feed {
+    box-shadow: inset 3px 0 0 var(--teal);
+  }
+  .drawer-head { display: flex; gap: 12px; align-items: flex-start; }
+  .drawer-head .avatar { width: 44px; height: 44px; font-size: 14px; border-radius: 10px; }
+  .drawer-title { font-size: 16px; font-weight: 750; letter-spacing: -0.02em; }
+  .drawer-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .drawer-live {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--teal); margin-top: 6px;
+  }
+  .drawer-live i {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--teal);
+    display: inline-block; animation: livePulse 1.6s ease-out infinite;
+  }
+  .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .stat {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+    text-align: center; transition: border-color 0.25s, transform 0.25s;
+  }
+  .drawer.live-feed .stat { border-color: rgba(20,184,166,0.35); }
+  .stat .v { font-family: var(--mono); font-size: 18px; font-weight: 700; }
+  .stat .l { font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+  .section-h {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--faint); margin-bottom: 8px;
+  }
+  .dna-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .dna-field {
+    background: var(--bg); border: 1px solid var(--border-soft); border-radius: 8px; padding: 8px 10px;
+  }
+  .dna-field .fk { font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; }
+  .dna-field .fv { font-weight: 600; margin-top: 2px; font-size: 12.5px; }
+  .risk-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .risk-list li {
+    padding: 8px 10px; border-radius: 8px; background: rgba(248,113,113,0.08);
+    border: 1px solid rgba(248,113,113,0.25); color: #fecaca; font-size: 12px;
+  }
+  .evidence { display: flex; flex-direction: column; gap: 8px; }
+  .ev-card {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+    transition: border-color 0.2s;
+  }
+  .ev-card:hover { border-color: var(--teal-border); }
+  .ev-quote { font-style: italic; color: #c5d0e6; font-size: 12.5px; margin-bottom: 6px; }
+  .ev-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted); }
+  .ev-meta a { color: var(--teal); text-decoration: none; }
+  .ev-meta a:hover { text-decoration: underline; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: #0f766e; color: #ecfdf5; font-weight: 650; padding: 12px 20px; border-radius: 10px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.4); opacity: 0; transition: all 0.25s ease; z-index: 50;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .score { font-family: var(--mono); font-weight: 700; }
+  .score.hi { color: var(--ok); }
+  .score.mid { color: var(--warn); }
+  .score.lo { color: var(--muted); }
+
+  @media (max-width: 1100px) {
+    .workspace { grid-template-columns: 180px 1fr 280px; }
+  }
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <div class="brand"><span class="logo">AI</span> Lead Intelligence</div>
+      <span class="mockup-label">Hybrid A+C — pick one</span>
+    </div>
+    <button type="button" class="btn-run" id="btnRun" aria-label="Run search">▶ Run</button>
+  </header>
+
+  <div class="workspace">
+    <!-- LEFT (A chrome) -->
+    <aside class="pane rail" aria-label="References and recent searches">
+      <div class="rail-section">
+        <div class="rail-h">Reference companies</div>
+        <div class="ref-card active">
+          <div class="avatar av-adept" aria-hidden="true">AD</div>
+          <div class="ref-meta">
+            <div class="ref-name">Adept AI</div>
+            <div class="ref-sub">Agentic automation · SF</div>
+          </div>
+        </div>
+        <div class="ref-card active">
+          <div class="avatar av-bd" aria-hidden="true">BD</div>
+          <div class="ref-meta">
+            <div class="ref-name">Boston Dynamics</div>
+            <div class="ref-sub">Mobile robotics · Waltham</div>
+          </div>
+        </div>
+        <button type="button" class="chip" style="width:100%;justify-content:center;margin-top:4px;">+ Add reference</button>
+      </div>
+      <div class="rail-section">
+        <div class="rail-h">Recent searches</div>
+        <div class="chip-row">
+          <button type="button" class="chip active">Robotics PE targets</button>
+          <button type="button" class="chip">Adept + BD similar</button>
+          <button type="button" class="chip">Industrial automation US</button>
+          <button type="button" class="chip">Private robotics Series B+</button>
+        </div>
+      </div>
+      <div class="rail-section">
+        <div class="rail-h">Session</div>
+        <div style="color:var(--muted);font-size:12px;">6 ranked · 2 refs · CSV catalog</div>
+      </div>
+    </aside>
+
+    <!-- CENTER (C cards) -->
+    <main class="center pane" aria-label="Ideal DNA and ranked lead cards">
+      <div class="dna-strip" role="region" aria-label="Ideal DNA">
+        <span class="dna-label">Ideal DNA</span>
+        <span class="dna-pill"><span class="k">Industry</span> Robotics / Automation</span>
+        <span class="dna-pill"><span class="k">Ownership</span> Private</span>
+        <span class="dna-pill"><span class="k">Geo</span> Global + US</span>
+        <span class="dna-pill"><span class="k">Growth</span> Growing</span>
+        <span class="dna-pill"><span class="k">Model</span> B2B / Enterprise</span>
+      </div>
+      <div class="cards-toolbar">
+        <div class="toolbar-left">Ranked leads · <strong id="showingLabel">4 of 6</strong></div>
+        <div class="page-size">
+          <label for="pageSize">Show</label>
+          <select id="pageSize" aria-label="Cards per page">
+            <option value="4" selected>4</option>
+            <option value="6">6</option>
+            <option value="all">All</option>
+          </select>
+        </div>
+      </div>
+      <div class="cards-scroll" id="cardsScroll">
+        <div class="cards-grid" id="cardsGrid" role="list"></div>
+      </div>
+    </main>
+
+    <!-- RIGHT (A drawer) -->
+    <aside class="pane drawer" id="drawer" aria-label="Selected lead detail" aria-live="polite"></aside>
+  </div>
+
+  <div class="toast" id="toast" role="status">Would start search</div>
+
+<script>
+const LEADS = [
+  {
+    id: "fig", name: "Figure AI", sub: "Humanoid robots · Sunnyvale", av: "av-fig", initials: "FI",
+    score: 92, conf: 88, rec: "CONTACT_NOW", badges: [], evid: 7,
+    dna: { industry: "Humanoid robotics", ownership: "Private", geo: "US", growth: "Hypergrowth", size: "200–500", customers: "Auto / logistics OEMs" },
+    risks: [],
+    evidence: [
+      { q: "Building general-purpose humanoids for manufacturing and logistics.", field: "identity", url: "https://example.com/figure/about", src: "website" },
+      { q: "Series B closed; expanding Bay Area engineering headcount.", field: "growth", url: "https://example.com/figure/news", src: "news" },
+      { q: "Partnership discussions with automotive OEMs reported.", field: "customers", url: "https://example.com/figure/press", src: "press" }
+    ]
+  },
+  {
+    id: "cov", name: "Covariant", sub: "AI warehouse robotics · Emeryville", av: "av-cov", initials: "CO",
+    score: 87, conf: 82, rec: "CONTACT_NOW", badges: [], evid: 6,
+    dna: { industry: "Warehouse automation", ownership: "Private", geo: "US + EU", growth: "Growing", size: "100–250", customers: "3PLs / e-commerce" },
+    risks: [],
+    evidence: [
+      { q: "RFM foundation model powers robotic picking across SKUs.", field: "technology", url: "https://example.com/covariant/rfm", src: "website" },
+      { q: "Deployed with major logistics operators in NA and Europe.", field: "geography", url: "https://example.com/covariant/customers", src: "case study" }
+    ]
+  },
+  {
+    id: "vic", name: "Vicarious Systems", sub: "Industrial robot AI · Union City", av: "av-vic", initials: "VI",
+    score: 78, conf: 65, rec: "RESEARCH_MORE", badges: ["risk"], evid: 4,
+    dna: { industry: "Industrial robotics AI", ownership: "Private (acq. signals)", geo: "US", growth: "Unclear", size: "50–150", customers: "Manufacturing" },
+    risks: ["Acquisition rumors may change ownership DNA mid-funnel", "Sparse recent public hiring signals"],
+    evidence: [
+      { q: "Vision-based robot brains for flexible manufacturing cells.", field: "identity", url: "https://example.com/vicarious/product", src: "website" },
+      { q: "Limited post-2023 product roadmap visibility.", field: "growth", url: "https://example.com/vicarious/blog", src: "blog" }
+    ]
+  },
+  {
+    id: "soft", name: "Soft Robotics", sub: "Gripper systems · Bedford", av: "av-soft", initials: "SR",
+    score: 74, conf: 71, rec: "RESEARCH_MORE", badges: [], evid: 5,
+    dna: { industry: "End-of-arm tooling", ownership: "Private", geo: "US", growth: "Stable", size: "50–100", customers: "Food / CPG packagers" },
+    risks: [],
+    evidence: [
+      { q: "mGrip soft grippers for irregular food and CPG SKUs.", field: "services", url: "https://example.com/soft/mgrip", src: "website" },
+      { q: "Focus on food packaging lines reduces industrial breadth.", field: "customers", url: "https://example.com/soft/industries", src: "website" }
+    ]
+  },
+  {
+    id: "path", name: "Path Robotics", sub: "Autonomous welding · Columbus", av: "av-path", initials: "PR",
+    score: 71, conf: 58, rec: "MONITOR", badges: ["noweb"], evid: 2,
+    dna: { industry: "Welding automation", ownership: "Private", geo: "US Midwest", growth: "Growing", size: "100–200", customers: "Metal fab shops" },
+    risks: ["Low web evidence density — catalog-only enrichment"],
+    evidence: [
+      { q: "Autonomous welding cells for structural metal fabrication.", field: "identity", url: "https://example.com/path/overview", src: "directory" },
+      { q: "Midwest manufacturing footprint; limited global signal.", field: "geography", url: "https://example.com/path/locations", src: "directory" }
+    ]
+  },
+  {
+    id: "agi", name: "Agility Robotics", sub: "Digit bipedal · Corvallis", av: "av-agi", initials: "AG",
+    score: 68, conf: 75, rec: "RESEARCH_MORE", badges: [], evid: 5,
+    dna: { industry: "Bipedal logistics robots", ownership: "Private", geo: "US", growth: "Growing", size: "150–300", customers: "Warehouses / Amazon pilots" },
+    risks: [],
+    evidence: [
+      { q: "Digit designed for tote moving in human-centric warehouses.", field: "customers", url: "https://example.com/agility/digit", src: "website" },
+      { q: "Multi-year logistics pilot programs expanding.", field: "growth", url: "https://example.com/agility/news", src: "news" }
+    ]
+  }
+];
+
+const REC_CLASS = { CONTACT_NOW: "rec-contact", RESEARCH_MORE: "rec-research", MONITOR: "rec-monitor", REJECT: "rec-reject" };
+const REC_LABEL = { CONTACT_NOW: "Contact now", RESEARCH_MORE: "Research more", MONITOR: "Monitor", REJECT: "Reject" };
+
+function scoreClass(s) { return s >= 80 ? "hi" : s >= 65 ? "mid" : "lo"; }
+function ringColor(s) { return s >= 80 ? "#34d399" : s >= 65 ? "#fbbf24" : "#9CA3AF"; }
+
+function badgeHtml(badges) {
+  return badges.map(b => b === "risk"
+    ? '<span class="badge badge-risk">⚠ Risk</span>'
+    : '<span class="badge badge-noweb">◌ No web data</span>').join("");
+}
+
+function ringSvg(value, color, opts = {}) {
+  const size = opts.size || 48;
+  const r = opts.r || 18;
+  const sw = opts.sw || 4.5;
+  const c = 2 * Math.PI * r;
+  const pct = Math.max(0, Math.min(1, value));
+  const dash = `${(c * pct).toFixed(2)} ${c.toFixed(2)}`;
+  const cx = size / 2;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true">
+    <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="#121826" stroke-width="${sw}"/>
+    <circle class="ring-progress" cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="${color}" stroke-width="${sw}"
+      stroke-linecap="round" stroke-dasharray="${dash}"/>
+  </svg>`;
+}
+
+function metricBlock(kind, L) {
+  if (kind === "score") {
+    return `<div class="metric" data-tip="score">
+      <span class="metric-label" tabindex="0">Score</span>
+      <div class="tip" role="tooltip">Qualification score — business fit 60% + strategic fit 40%. Separate from confidence.</div>
+      <div class="ring-wrap">
+        ${ringSvg(L.score / 100, ringColor(L.score))}
+        <div class="num ${scoreClass(L.score)}">${L.score}</div>
+      </div>
+    </div>`;
+  }
+  if (kind === "conf") {
+    return `<div class="metric" data-tip="conf">
+      <span class="metric-label" tabindex="0">Conf.</span>
+      <div class="tip" role="tooltip">How complete the company data is</div>
+      <div class="ring-wrap">
+        ${ringSvg(L.conf / 100, "#3B82F6")}
+        <div class="num conf-num">${L.conf}</div>
+      </div>
+    </div>`;
+  }
+  const evidPct = Math.min(L.evid / 10, 1);
+  return `<div class="metric" data-tip="evid">
+    <span class="metric-label" tabindex="0">Evidence</span>
+    <div class="tip" role="tooltip">Supporting quotes / fields</div>
+    <div class="ring-wrap">
+      ${ringSvg(evidPct, "#2DD4BF")}
+      <div class="num evid-num">${L.evid}</div>
+    </div>
+  </div>`;
+}
+
+let selected = LEADS[0].id;
+let pageSize = 4;
+
+function visibleLeads() {
+  if (pageSize === "all" || pageSize >= LEADS.length) return LEADS;
+  return LEADS.slice(0, Number(pageSize));
+}
+
+function renderCards() {
+  const grid = document.getElementById("cardsGrid");
+  const vis = visibleLeads();
+  document.getElementById("showingLabel").textContent = `${vis.length} of ${LEADS.length}`;
+
+  grid.innerHTML = vis.map(L => {
+    const snips = L.evidence.slice(0, 2).map(e => {
+      const q = e.q.length > 90 ? e.q.slice(0, 90) + "…" : e.q;
+      return `<div class="snip">“${q}” <a href="${e.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a></div>`;
+    }).join("");
+    return `<button type="button" class="lead-card ${L.id === selected ? "selected" : ""}" data-id="${L.id}" role="listitem" aria-selected="${L.id === selected}" aria-label="${L.name}, score ${L.score}">
+      <div class="lead-top">
+        <div class="avatar av-sm ${L.av}" aria-hidden="true">${L.initials}</div>
+        <div class="lead-meta">
+          <div class="lead-name">${L.name}</div>
+          <div class="lead-sub">${L.sub}</div>
+          <div class="badges">${badgeHtml(L.badges)}</div>
+          <span class="rec ${REC_CLASS[L.rec]}">${REC_LABEL[L.rec]}</span>
+        </div>
+      </div>
+      <div class="metrics">
+        ${metricBlock("score", L)}
+        ${metricBlock("conf", L)}
+        ${metricBlock("evid", L)}
+      </div>
+      <div class="snippets">${snips}</div>
+    </button>`;
+  }).join("");
+
+  grid.querySelectorAll(".lead-card").forEach(card => {
+    card.addEventListener("click", () => selectLead(card.dataset.id));
+    card.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectLead(card.dataset.id); }
+    });
+  });
+
+  // Restart ring draw animation on selected card
+  const sel = grid.querySelector(".lead-card.selected");
+  if (sel) {
+    sel.querySelectorAll(".ring-progress").forEach(el => {
+      el.style.animation = "none";
+      void el.offsetWidth;
+      el.style.animation = "";
+    });
+  }
+}
+
+function renderDrawer(L) {
+  const drawer = document.getElementById("drawer");
+  drawer.classList.remove("live-feed");
+  void drawer.offsetWidth;
+  drawer.classList.add("live-feed");
+  clearTimeout(window.__liveT);
+  window.__liveT = setTimeout(() => drawer.classList.remove("live-feed"), 900);
+
+  drawer.innerHTML = `
+    <div class="drawer-head">
+      <div class="avatar ${L.av}" aria-hidden="true">${L.initials}</div>
+      <div>
+        <div class="drawer-title">${L.name}</div>
+        <div class="drawer-sub">${L.sub}</div>
+        <div class="badges" style="margin-top:6px">${badgeHtml(L.badges)}</div>
+        <div class="drawer-live"><i aria-hidden="true"></i> Live selection</div>
+      </div>
+    </div>
+    <div class="stat-row">
+      <div class="stat"><div class="v score ${scoreClass(L.score)}">${L.score}</div><div class="l">Qualify</div></div>
+      <div class="stat"><div class="v" style="color:var(--accent)">${L.conf}</div><div class="l">Confidence</div></div>
+      <div class="stat"><div class="v" style="font-size:11px;padding-top:4px"><span class="rec ${REC_CLASS[L.rec]}">${REC_LABEL[L.rec]}</span></div><div class="l">Action</div></div>
+    </div>
+    <div>
+      <div class="section-h">Company DNA</div>
+      <div class="dna-grid">
+        ${Object.entries(L.dna).map(([k,v]) => `<div class="dna-field"><div class="fk">${k}</div><div class="fv">${v}</div></div>`).join("")}
+      </div>
+    </div>
+    ${L.risks.length ? `<div><div class="section-h">Risks</div><ul class="risk-list">${L.risks.map(r => `<li>${r}</li>`).join("")}</ul></div>` : ""}
+    <div>
+      <div class="section-h">Evidence (${L.evidence.length})</div>
+      <div class="evidence">
+        ${L.evidence.map(e => `
+          <article class="ev-card">
+            <p class="ev-quote">“${e.q}”</p>
+            <div class="ev-meta"><span>${e.field} · ${e.src}</span><a href="${e.url}" target="_blank" rel="noopener">source ↗</a></div>
+          </article>`).join("")}
+      </div>
+    </div>`;
+}
+
+function selectLead(id) {
+  selected = id;
+  const L = LEADS.find(x => x.id === id);
+  // If selected lead is off current page, expand to show all
+  const vis = visibleLeads();
+  if (!vis.find(x => x.id === id) && pageSize !== "all") {
+    pageSize = "all";
+    document.getElementById("pageSize").value = "all";
+  }
+  renderCards();
+  renderDrawer(L);
+}
+
+function setPageSize(val) {
+  const grid = document.getElementById("cardsGrid");
+  grid.classList.add("paging");
+  setTimeout(() => {
+    pageSize = val === "all" ? "all" : Number(val);
+    const vis = visibleLeads();
+    if (!vis.find(x => x.id === selected)) {
+      selected = vis[0].id;
+    }
+    renderCards();
+    renderDrawer(LEADS.find(x => x.id === selected));
+    grid.classList.remove("paging");
+  }, 180);
+}
+
+renderCards();
+renderDrawer(LEADS.find(x => x.id === selected));
+
+document.getElementById("pageSize").addEventListener("change", e => setPageSize(e.target.value));
+
+document.getElementById("btnRun").addEventListener("click", () => {
+  const t = document.getElementById("toast");
+  t.classList.add("show");
+  clearTimeout(window.__toastT);
+  window.__toastT = setTimeout(() => t.classList.remove("show"), 2200);
+});
+</script>
+</body>
+</html>
