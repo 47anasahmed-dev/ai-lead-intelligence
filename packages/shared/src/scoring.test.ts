@@ -4,6 +4,14 @@ import { similarityScore } from './similarity.js';
 import { qualificationScore, recommend } from './qualification.js';
 import { deterministicFilter } from './filter.js';
 import type { CsvCompanyRow } from './types.js';
+import {
+  computeAiResearchConfidence,
+  extractAiNarratives,
+  extractAiResearchFromInferences,
+  isThinResearchStatus,
+  joinAiFitNarrative,
+  thinFitNarrativeMessage,
+} from './aiIntelligence.js';
 
 function row(partial: Partial<CsvCompanyRow> & Pick<CsvCompanyRow, 'company_id' | 'company_name'>): CsvCompanyRow {
   return {
@@ -457,5 +465,46 @@ describe('AI research stamps affect qualification', () => {
     );
     expect(sanitized.redFlags).toEqual(['pending lawsuit over contracts', 'xxxxx']);
     expect(sanitized.researchNote).toBe('Limited product detail on homepage');
+  });
+});
+
+describe('AI intelligence surfaces', () => {
+  it('extracts research stamps from inferences', () => {
+    const r = extractAiResearchFromInferences([
+      'AI research status: empty',
+      'AI research: No usable findings after quote filter',
+      'AI red flag: Shutdown rumored',
+      'Inference: mid-market band',
+    ]);
+    expect(r.researchStatus).toBe('empty');
+    expect(r.researchNote).toBe('No usable findings after quote filter');
+    expect(r.redFlags).toEqual(['Shutdown rumored']);
+    expect(r.otherInferences).toEqual(['Inference: mid-market band']);
+  });
+
+  it('joins AI narrative lines into fit narrative', () => {
+    const bullets = extractAiNarratives([
+      'Industry alignment high',
+      'AI narrative: Strong service overlap with Ideal DNA.',
+      'AI narrative: Geography matches target region.',
+    ]);
+    expect(bullets).toHaveLength(2);
+    expect(joinAiFitNarrative(bullets)).toContain('Strong service overlap');
+  });
+
+  it('computes aiResearchConfidence distinct from scoring confidence', () => {
+    expect(computeAiResearchConfidence(null)).toBeNull();
+    expect(computeAiResearchConfidence('ok', { hasWebsiteFindings: true })).toBeGreaterThan(70);
+    expect(computeAiResearchConfidence('empty')).toBeLessThan(40);
+    expect(
+      computeAiResearchConfidence('ok', { redFlagCount: 2, hasWebsiteFindings: true }),
+    ).toBeLessThan(computeAiResearchConfidence('ok', { hasWebsiteFindings: true })!);
+  });
+
+  it('thin research statuses get honest thin messages', () => {
+    expect(isThinResearchStatus('empty')).toBe(true);
+    expect(isThinResearchStatus('ok')).toBe(false);
+    expect(thinFitNarrativeMessage('empty')).toMatch(/no usable findings/i);
+    expect(thinFitNarrativeMessage('pending')).toMatch(/awaiting AI research/i);
   });
 });

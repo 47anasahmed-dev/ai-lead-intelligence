@@ -85,3 +85,18 @@ Default `AI_PROVIDER=noop` — no network/LLM calls; batch still persists CSV DN
 ## Evidence in responses
 
 Company detail and search results return `evidence[]` with `field`, `value`, `source`, optional `url` / `evidenceQuote`. Resolution order: DNA.evidence (rich) → Evidence table → live CSV DNA rebuild.
+
+## AI Lead Intelligence fields (additive)
+
+After deterministic scoring marks the search `completed`, a timed AI intelligence pass (when `AI_PROVIDER` is live) may attach:
+
+| Field | Where | Notes |
+|---|---|---|
+| `aiFitNarrative` | each `/results` row | 2–4 sentence why-this-lead vs Ideal DNA; evidence-locked. Thin/empty research → honest thin status, not invented prose. Also mirrored as `AI narrative:` lines in `similarityExplanation`. |
+| `aiFitNarrativeThin` | each `/results` row | `true` when narrative is a thin/awaiting stub |
+| `inferences` | each `/results` row | DNA inference stamps (incl. `AI research status:`, `AI research:`, `AI red flag:`) so UI does not need a second `getCompany` |
+| `researchNote` / `researchStatus` / `redFlags` | each `/results` row | Typed parses of the stamps above |
+| `aiResearchConfidence` | each `/results` row | 0–100 or `null` — **distinct** from scoring `confidence` (data completeness) |
+| `idealDnaSummary` | `meta` on `/results`, also on `GET /searches/:id` | LLM Ideal DNA prose from reference DNAs + centroid; also stored on `idealDna.idealDnaSummary` |
+
+Deterministic `similarityScore` / `qualificationScore` / `confidence` are unchanged. `demo_fit` is never used for scoring.

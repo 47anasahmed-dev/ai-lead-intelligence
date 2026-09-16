@@ -34,6 +34,7 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
   const [searchId, setSearchId] = useState<string | null>(initialSearchId);
   const [status, setStatus] = useState<string>('');
   const [idealDna, setIdealDna] = useState<CompanyDnaPayload | null>(null);
+  const [idealDnaSummary, setIdealDnaSummary] = useState<string | null>(null);
   const [references, setReferences] = useState<SearchRefCompany[]>([]);
   const [results, setResults] = useState<ResultRow[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -69,11 +70,21 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
   const fetchLive = useCallback(async (id: string) => {
     const [s, r] = await Promise.all([client.getSearch(id), client.getResults(id, 200)]);
     setStatus(s.data.status);
-    setIdealDna(
+    const dna =
       (s.data.idealDna as CompanyDnaPayload | null | undefined) ??
-        (r.meta.idealDna as CompanyDnaPayload | null | undefined) ??
-        null,
+      (r.meta.idealDna as CompanyDnaPayload | null | undefined) ??
+      null;
+    const summary =
+      s.data.idealDnaSummary ??
+      r.meta.idealDnaSummary ??
+      dna?.idealDnaSummary ??
+      null;
+    setIdealDna(
+      dna && summary && !dna.idealDnaSummary
+        ? { ...dna, idealDnaSummary: summary }
+        : dna,
     );
+    setIdealDnaSummary(summary);
     const refs = (s.data.references ?? []).map((x) => ({
       id: x.company.id,
       name: x.company.name,
@@ -265,7 +276,12 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
         />
 
         <main className="flex min-h-0 flex-col overflow-hidden bg-[#121826]">
-          <IdealDnaStrip idealDna={idealDna} thresholds={thresholds} status={status} />
+          <IdealDnaStrip
+            idealDna={idealDna}
+            idealDnaSummary={idealDnaSummary}
+            thresholds={thresholds}
+            status={status}
+          />
 
           <div className="flex items-center justify-between gap-3 border-b border-slate-700/40 px-4 py-2">
             <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">

@@ -65,7 +65,18 @@ type Props = {
 export function LeadCard({ row, rank, selected, onSelect }: Props) {
   const tone = AVATAR[hash(row.company.name) % AVATAR.length];
   const chips = companyDnaChips(row.company);
-  const hint = aiRiskHint(row.risks ?? []);
+  const risksForHint = [
+    ...(row.risks ?? []),
+    ...((row.redFlags ?? []).map((f) => `AI red flag: ${f}`)),
+  ];
+  if (
+    row.researchStatus &&
+    ['empty', 'fetch_failed', 'invalid_url', 'ai_error'].includes(row.researchStatus) &&
+    !risksForHint.some((r) => /no usable|fetch failed|invalid or missing|enrichment error/i.test(r))
+  ) {
+    risksForHint.push(`AI research status: ${row.researchStatus}`);
+  }
+  const hint = aiRiskHint(risksForHint);
   const oneLiner = leadAiOneLiner(row);
   const rec = recStyle(row.recommendation);
   const evidenceCount = row.evidence?.length ?? 0;

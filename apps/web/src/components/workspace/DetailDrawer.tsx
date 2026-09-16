@@ -26,6 +26,7 @@ import {
   extractWhyRanked,
   idealDnaChips,
   aiRiskHint,
+  resolveAiResearch,
 } from '@/lib/aiSurfaces';
 import { cn } from '@/lib/utils';
 
@@ -462,6 +463,8 @@ function ReferencePanel({
 
 type LeadAiBundle = {
   narratives: string[];
+  fitNarrative: string | null;
+  fitThin: boolean;
   whyRanked: string[];
   risks: string[];
   missing: string[];
@@ -470,14 +473,33 @@ type LeadAiBundle = {
   redFlags: string[];
   positiveSignals: string[];
   fitPlaceholder: boolean;
+  aiResearchConfidence: number | null;
 };
 
 function buildLeadAiBundle(row: ResultRow, dna: CompanyDnaPayload | null): LeadAiBundle {
-  const narratives = extractAiNarratives(row.similarityExplanation);
+  const fromExpl = extractAiNarratives(row.similarityExplanation);
+  const fitNarrative =
+    row.aiFitNarrative?.trim() ||
+    (fromExpl.length ? fromExpl.join(' ') : null);
+  const narratives = fitNarrative
+    ? fitNarrative.split(/(?<=\.)\s+/).map((s) => s.trim()).filter(Boolean)
+    : fromExpl;
   const whyRanked = extractWhyRanked(row.similarityExplanation);
-  const research = extractAiResearchFromInferences(dna?.inferences);
+  const fromDna = extractAiResearchFromInferences(dna?.inferences);
+  const research = resolveAiResearch({
+    inferences: row.inferences ?? dna?.inferences,
+    researchNote: row.researchNote ?? fromDna.researchNote,
+    researchStatus: row.researchStatus ?? fromDna.status,
+    redFlags: row.redFlags ?? fromDna.redFlags,
+  });
+  const fitThin =
+    row.aiFitNarrativeThin === true ||
+    (fitNarrative != null && /AI fit narrative thin:/i.test(fitNarrative)) ||
+    narratives.length === 0;
   return {
     narratives,
+    fitNarrative,
+    fitThin,
     whyRanked,
     risks: row.risks ?? [],
     missing: row.missingInformation ?? [],
@@ -485,7 +507,8 @@ function buildLeadAiBundle(row: ResultRow, dna: CompanyDnaPayload | null): LeadA
     researchStatus: research.status,
     redFlags: research.redFlags,
     positiveSignals: row.positiveSignals ?? [],
-    fitPlaceholder: narratives.length === 0,
+    fitPlaceholder: narratives.length === 0 || fitThin,
+    aiResearchConfidence: row.aiResearchConfidence ?? null,
   };
 }
 
@@ -508,7 +531,9 @@ function AiIntelligenceSection({
           <h4 className="text-[10px] font-semibold uppercase tracking-wide text-teal-400/90">
             Fit narrative
           </h4>
-          {ai.narratives.length > 0 ? (
+          {ai.fitNarrative && !ai.fitThin ? (
+            <p className="mt-1 text-xs text-slate-200 leading-relaxed">{ai.fitNarrative}</p>
+          ) : ai.narratives.length > 0 ? (
             <ul className="mt-1 space-y-1">
               {ai.narratives.map((n) => (
                 <li key={n} className="text-xs text-slate-200 leading-relaxed">
@@ -520,7 +545,7 @@ function AiIntelligenceSection({
             <p className="mt-1 text-xs text-slate-500 italic">
               {loading
                 ? 'Loading enrichment…'
-                : 'No AI fit narrative on this lead yet — structure ready when API returns narrativeBullets / AI narrative lines.'}
+                : 'No AI fit narrative on this lead yet — awaiting evidence-locked OpenRouter narrative.'}
             </p>
           )}
           {ai.fitPlaceholder && ai.positiveSignals[0] && (
@@ -602,7 +627,10 @@ function AiIntelligenceSection({
         </div>
 
         <p className="text-[10px] text-slate-600 border-t border-slate-700/50 pt-2">
-          Scoring confidence (card rings) = data completeness. AI research status above is separate.
+          Scoring confidence (card rings) = data completeness.
+          {ai.aiResearchConfidence != null
+            ? ` AI research confidence = ${ai.aiResearchConfidence}/100 (separate).`
+            : ' AI research confidence pending (separate from scoring).'}
         </p>
       </div>
     </Section>
