@@ -99,3 +99,21 @@ export function sizeProximityScore(a: string | null, b: string | null): number {
   const ratio = Math.min(ma, mb) / Math.max(ma, mb);
   return Math.round(ratio * 100);
 }
+
+/**
+ * Defensive CSV column swap: if linkedin_url does not contain linkedin.com but
+ * company_description does, swap them so LinkedIn is never taken from description.
+ */
+export function repairCsvLinkedInFields<T extends {
+  linkedin_url?: string | null;
+  company_description?: string | null;
+}>(row: T): T {
+  const li = (row.linkedin_url ?? '').trim();
+  const desc = (row.company_description ?? '').trim();
+  const liHas = /linkedin\.com/i.test(li);
+  const descHas = /linkedin\.com/i.test(desc);
+  if (!liHas && descHas) {
+    return { ...row, linkedin_url: desc, company_description: li };
+  }
+  return row;
+}
