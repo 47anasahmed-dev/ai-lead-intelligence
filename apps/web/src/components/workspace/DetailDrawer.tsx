@@ -320,7 +320,7 @@ function LeadPanel({
 
         <AiIntelligenceSection ai={ai} loading={loading} />
 
-        <Section title="Evidence">
+        <Section title={`Evidence (${evidence.length})`}>
           {loading && !evidence.length ? (
             <p className="flex items-center gap-2 text-xs text-[#9CA3AF]">
               <Loader2 className="h-3 w-3 animate-spin" /> Loading…
@@ -328,7 +328,7 @@ function LeadPanel({
           ) : evidence.length === 0 ? (
             <p className="text-xs italic text-[#9CA3AF]">No evidence rows yet</p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="flex flex-col gap-2">
               {evidence.slice(0, 12).map((e, i) => (
                 <EvidenceRow key={`${e.field}-${i}`} item={e} />
               ))}
@@ -537,7 +537,7 @@ function ReferencePanel({
           )}
         </Section>
 
-        <Section title="Evidence">
+        <Section title={`Evidence (${evidence.length})`}>
           <div className="mb-2 flex flex-wrap gap-2 text-xs">
             {company.website && normalizeUrl(company.website) && (
               <a
@@ -563,7 +563,7 @@ function ReferencePanel({
           {evidence.length === 0 ? (
             <p className="text-xs italic text-[#9CA3AF]">No evidence rows</p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="flex flex-col gap-2">
               {evidence.slice(0, 10).map((e, i) => (
                 <EvidenceRow key={`${e.field}-${i}`} item={e} />
               ))}
@@ -969,30 +969,34 @@ function EvidenceRow({
   item: { field: string; value: string; source: string; url?: string; evidenceQuote?: string };
 }) {
   const href = item.url ? normalizeUrl(item.url) : null;
+  const quote = item.evidenceQuote?.trim() || item.value;
+  const quoted = Boolean(item.evidenceQuote?.trim());
   return (
-    <li className="rounded-lg border border-[#2d3748] bg-[#121826] px-2.5 py-2.5 transition-[border-color] duration-200 hover:border-[rgba(20,184,166,0.4)]">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-[12.5px] leading-snug">
-          {item.evidenceQuote ? (
-            <span className="italic text-[#c5d0e6]">&ldquo;{item.evidenceQuote}&rdquo;</span>
-          ) : (
-            <span className="text-[#D1D5DB]">{item.value}</span>
-          )}
-        </p>
+    <li className="rounded-lg border border-[#2d3748] bg-[#121826] p-2.5 transition-[border-color] duration-200 hover:border-[rgba(20,184,166,0.4)]">
+      <p className="mb-1.5 text-[12.5px] italic leading-snug text-[#c5d0e6]">
+        {quoted ? (
+          <>
+            &ldquo;{quote}&rdquo;
+          </>
+        ) : (
+          quote
+        )}
+      </p>
+      <div className="flex items-start justify-between gap-2 text-[11px] text-[#D1D5DB]">
+        <span className="min-w-0">
+          {item.field}
+          {item.source ? ` · ${item.source}` : ''}
+        </span>
         {href && (
           <a
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="shrink-0 text-[11px] text-[#2DD4BF] hover:underline"
+            className="shrink-0 text-[#2DD4BF] no-underline hover:underline"
           >
             source ↗
           </a>
         )}
-      </div>
-      <div className="mt-1.5 flex flex-wrap justify-between gap-1.5 text-[11px] text-[#D1D5DB]">
-        <span>{item.field}</span>
-        <span>{item.source}</span>
       </div>
     </li>
   );
