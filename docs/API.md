@@ -50,7 +50,11 @@ Postgres default on crowded hosts: `localhost:5433` (see `docker-compose.yml`).
 
 ## AI enrichment (catalog-wide)
 
-**Source of truth:** catalog batch + manual refresh persist DNA (AI research status, red flags, website evidence) for every company. Search scoring **reads persisted DNA** for all candidates so negatives/empty stamps are not limited to top-N.
+**Source of truth:** catalog batch + manual refresh + deep enrich (top-K after search) persist DNA (AI research status, red flags, multi-source evidence) for every company. Search scoring **reads persisted DNA** for all candidates so negatives/empty stamps are not limited to top-N.
+
+**Merge-only persist:** refresh / re-enrich / deep enrich never `deleteMany` evidence. New evidence rows are appended and deduped by `companyId+source+field+value+quote`. CompanyProfile DNA is merged with existing (keep good scalar values; union facts/inferences/evidence; optional AI merge assist then deterministic union so nothing important is dropped).
+
+**LinkedIn:** best-effort anonymous fetch only. Login walls → research note; never invent LinkedIn facts. Official LinkedIn / third-party firmographic APIs are a future enhancement (see README).
 
 ```bash
 # Weekly / full catalog (chunked; re-run with rising --offset until done)

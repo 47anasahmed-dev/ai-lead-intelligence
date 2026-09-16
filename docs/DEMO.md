@@ -16,7 +16,7 @@ pnpm dev
 1. Open **New search** → pick 2–3 reference B2B SaaS companies from the demo CSV.
 2. Run search → show Ideal DNA (facts / inferences / unknowns).
 3. Scroll ranked results: similarity overall + dimensions, qualification (60/40), recommendation.
-4. Open one company detail → evidence from CSV only; call out `demo_fit` is metadata, never scored.
+4. Open one company detail → evidence (CSV + enrichment when AI live); call out `demo_fit` is metadata, never scored. Refresh evidence merges — does not wipe prior findings.
 5. Optional: re-run with a government/nonprofit ownership candidate → hard REJECT.
 
 ## Talking points

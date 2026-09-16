@@ -3,10 +3,17 @@
  * NEVER overwrites existing non-null CSV facts. Quote-checked claims only.
  */
 
-import type { CompanyDna, EvidenceItem, EvidenceSource } from '@ali/shared';
+import type { AiProvider, CompanyDna, EvidenceItem, EvidenceSource } from '@ali/shared';
+import {
+  evidenceItemKey,
+  evidenceTableRowKey,
+  mashEvidenceValue,
+  mergeCompanyDna,
+  type DnaMergeAssist,
+} from '@ali/shared';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
-import type { AiProvider } from '@ali/shared';
+import { createServerAiProvider, isLiveAiEnabled } from '../ai/createProvider.js';
 import { researchDeep } from './deepResearch.js';
 import { researchWebsite } from './websiteResearch.js';
 
@@ -297,22 +304,130 @@ export async function enrichCompanyDna(
   return { dna: next, didEnrich: true };
 }
 
-/** Persist enriched DNA profile + evidence rows for a company. */
-export async function persistEnrichedDna(dna: CompanyDna): Promise<void> {
-  await prisma.companyProfile.upsert({
+export type PersistEnrichedDnaOptions = {
+  /** Optional live AI for merge assist; deterministic union always follows. */
+  ai?: AiProvider | null;
+};
+
+const DNA_MERGE_ASSIST_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    facts: { type: 'array', items: { type: 'string' } },
+    inferences: { type: 'array', items: { type: 'string' } },
+    notes: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['facts', 'inferences', 'notes'],
+} as const;
+
+/**
+ * Optional AI merge assist when both old + new DNA exist.
+ * Returns proposed list unions only — never trusted alone; caller always
+ * runs mergeCompanyDna (deterministic union) afterward.
+ */
+async function maybeAiMergeAssist(
+  existing: CompanyDna,
+  incoming: CompanyDna,
+  ai: AiProvider,
+): Promise<DnaMergeAssist | null> {
+  if (ai.name === 'noop') return null;
+  try {
+    const raw = await ai.generateStructured<{
+      facts?: string[];
+      inferences?: string[];
+      notes?: string[];
+    }>({
+      systemPrompt:
+        'You merge company research DNA findings. Preserve every important prior fact, inference, red flag, and note. Prefer concise unique bullets. Never invent new company facts. Return JSON { facts, inferences, notes }.',
+      userPrompt: JSON.stringify({
+        companyId: incoming.companyId,
+        existing: {
+          facts: existing.facts?.slice(0, 40),
+          inferences: existing.inferences?.slice(0, 40),
+          unknowns: existing.unknowns?.slice(0, 20),
+        },
+        incoming: {
+          facts: incoming.facts?.slice(0, 40),
+          inferences: incoming.inferences?.slice(0, 40),
+          unknowns: incoming.unknowns?.slice(0, 20),
+        },
+      }),
+      schema: DNA_MERGE_ASSIST_SCHEMA,
+    });
+    return {
+      facts: Array.isArray(raw?.facts) ? raw.facts.map(String) : [],
+      inferences: Array.isArray(raw?.inferences) ? raw.inferences.map(String) : [],
+      notes: Array.isArray(raw?.notes) ? raw.notes.map(String) : [],
+    };
+  } catch (err) {
+    console.warn(
+      '[enrich] AI DNA merge assist failed; using deterministic union only',
+      err instanceof Error ? err.message : err,
+    );
+    return null;
+  }
+}
+
+/**
+ * Persist enriched DNA + evidence with merge-only semantics (refresh / re-enrich / deep).
+ * - Never deleteMany evidence — append new rows; dedupe by companyId+source+field+value+quote
+ * - DNA JSON: merge with existing CompanyProfile — keep good values; append lists; no-loss union
+ * - Optional AI merge assist when old+new both exist, then deterministic union (source of truth)
+ */
+export async function persistEnrichedDna(
+  dna: CompanyDna,
+  opts?: PersistEnrichedDnaOptions,
+): Promise<void> {
+  const profile = await prisma.companyProfile.findUnique({
     where: { companyId: dna.companyId },
-    create: { companyId: dna.companyId, dna: dna as unknown as Prisma.InputJsonValue },
-    update: { dna: dna as unknown as Prisma.InputJsonValue },
+  });
+  const existing =
+    profile?.dna && typeof profile.dna === 'object'
+      ? (profile.dna as unknown as CompanyDna)
+      : null;
+
+  let assist: DnaMergeAssist | null = null;
+  if (existing?.companyId === dna.companyId) {
+    const ai =
+      opts?.ai ?? (isLiveAiEnabled() ? createServerAiProvider() : null);
+    if (ai && ai.name !== 'noop') {
+      assist = await maybeAiMergeAssist(existing, dna, ai);
+    }
+  }
+
+  const merged = mergeCompanyDna(existing, dna, assist);
+
+  await prisma.companyProfile.upsert({
+    where: { companyId: merged.companyId },
+    create: {
+      companyId: merged.companyId,
+      dna: merged as unknown as Prisma.InputJsonValue,
+    },
+    update: { dna: merged as unknown as Prisma.InputJsonValue },
   });
 
-  // Replace evidence for this company (avoid dupes on re-run)
-  await prisma.evidence.deleteMany({ where: { companyId: dna.companyId } });
-  if (dna.evidence.length) {
+  // Append-only evidence — never wipe prior rows on refresh
+  const existingRows = await prisma.evidence.findMany({
+    where: { companyId: merged.companyId },
+    select: { source: true, field: true, value: true },
+  });
+  const seen = new Set(
+    existingRows.map((row) =>
+      evidenceTableRowKey(merged.companyId, row),
+    ),
+  );
+  const toCreate = merged.evidence.filter((e: EvidenceItem) => {
+    const k = evidenceItemKey(merged.companyId, e);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  if (toCreate.length) {
     await prisma.evidence.createMany({
-      data: dna.evidence.map((e: EvidenceItem) => ({
-        companyId: dna.companyId,
+      data: toCreate.map((e: EvidenceItem) => ({
+        companyId: merged.companyId,
         field: e.field,
-        value: e.evidenceQuote ? `${e.value} | quote: ${e.evidenceQuote.slice(0, 240)}` : e.value,
+        value: mashEvidenceValue(e),
         source: e.source,
       })),
     });
@@ -460,7 +575,7 @@ export async function enrichCompaniesDeep(
     });
     out.set(enriched.companyId, enriched);
     if (opts?.persist) {
-      await persistEnrichedDna(enriched);
+      await persistEnrichedDna(enriched, { ai });
     }
     void didEnrich;
   }
@@ -479,12 +594,11 @@ export async function enrichCompanies(
   for (const dna of dnas) {
     const { dna: enriched, didEnrich } = await enrichCompanyDna(dna, ai);
     out.set(enriched.companyId, enriched);
-    if (opts?.persist && didEnrich) {
-      await persistEnrichedDna(enriched);
-    } else if (opts?.persist && !didEnrich) {
-      // Still persist baseline DNA so profiles exist
-      await persistEnrichedDna(enriched);
+    if (opts?.persist) {
+      // Merge-only persist (baseline or enriched) — never wipe prior findings
+      await persistEnrichedDna(enriched, { ai });
     }
+    void didEnrich;
   }
   return out;
 }

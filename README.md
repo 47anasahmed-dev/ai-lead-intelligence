@@ -119,15 +119,28 @@ pnpm --filter @ali/shared test
 
 ## Design trade-offs
 
-- Sync batch analysis (no Redis/BullMQ) for a reliable 5-hour demo.
-- Facts from CSV only; inferences labeled; unknowns explicit.
-- LLM enrichment intentionally stubbed / optional — MVP runs without API keys.
-- Criteria workflow deferred; same engines can be reused later.
+- Sync batch analysis (no Redis/BullMQ) for a reliable assessment demo.
+- CSV facts are immutable inputs; inferences labeled; unknowns explicit; `demo_fit` never scored.
+- Enrichment is **live when `AI_PROVIDER` + API key are set**, otherwise noop — MVP still runs without keys.
+- Refresh / re-enrich / deep enrich are **merge-only**: never wipe prior evidence or DNA findings; append + dedupe.
+- Criteria search is supported alongside reference search (same scoring engines).
+
+## Limitations & Future enhancements
+
+**Limitations (honest):**
+
+1. **LinkedIn** — company pages usually require login for a full profile. Anonymous fetch often hits a login wall; we record a research note and **never invent** LinkedIn facts. Best-effort public HTML only (no session/login scraping).
+2. **Enrichment coverage** — today is best-effort public HTML (website / About / optional news snippets) + OpenRouter (or OpenAI) structured extraction with **quote grounding**. Depth is limited to what anonymous fetch returns.
+
+**Future enhancements:**
+
+3. **Data APIs** — LinkedIn official API and/or third-party company data APIs (Apollo, Clearbit, etc.) would improve coverage and depth many-fold (About blurbs, funding, firmographics) without scraping login walls.
+4. **Stronger models** — larger / upgraded AI models (or provider upgrades) would improve Ideal DNA narratives, merge quality, and evidence extraction — still under anti-hallucination (quotes from fetched sources only).
 
 ## Demo script (~90s)
 
 1. Open dashboard → **New reference search**.
 2. Filter “SaaS”, select 3 peers → **Create & run**.
-3. Show ranked table (qualification, similarity, confidence, recommendation).
-4. Open top lead → DNA facts / inferences / unknowns.
-5. Call out: explainability + no `demo_fit` leakage.
+3. Show ranked table (qualification, similarity, confidence, recommendation); ~top-5 thresholds auto-apply when AI is live.
+4. Open top lead → DNA facts / inferences / unknowns / multi-source evidence (after deep enrich).
+5. Call out: explainability + no `demo_fit` leakage; refresh evidence merges, does not wipe.

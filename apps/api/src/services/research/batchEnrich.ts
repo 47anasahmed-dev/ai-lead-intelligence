@@ -96,7 +96,7 @@ export async function refreshCompanyEvidence(companyId: string): Promise<{
 
   const base = await loadDnaForCompany(company);
   if (!isLiveAiEnabled()) {
-    // Still persist baseline CSV DNA/evidence so UI is never empty
+    // Still persist baseline CSV DNA/evidence so UI is never empty (merge-only)
     await persistEnrichedDna(base);
     return {
       companyId,
@@ -108,7 +108,7 @@ export async function refreshCompanyEvidence(companyId: string): Promise<{
 
   const ai = createServerAiProvider();
   const { dna, didEnrich } = await enrichCompanyDna(base, ai);
-  await persistEnrichedDna(dna);
+  await persistEnrichedDna(dna, { ai });
   const statusInf = dna.inferences.find((i) => i.startsWith('AI research status:'));
   return {
     companyId,
@@ -179,7 +179,7 @@ export async function runBatchEnrichment(
       progress.currentCompanyId = company.id;
       try {
         const dna = companyToDna(company);
-        await persistEnrichedDna(dna);
+        await persistEnrichedDna(dna);  // merge-only; no AI when disabled
         progress.succeeded += 1;
       } catch {
         progress.failed += 1;
@@ -211,7 +211,7 @@ export async function runBatchEnrichment(
           ? (company.profile.dna as unknown as CompanyDna)
           : companyToDna(company);
       const { dna } = await enrichCompanyDna(base, ai);
-      await persistEnrichedDna(dna);
+      await persistEnrichedDna(dna, { ai });
       progress.succeeded += 1;
     } catch (err) {
       progress.failed += 1;
