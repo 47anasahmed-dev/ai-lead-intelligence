@@ -82,11 +82,19 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
   const evidenceCount = row.evidence?.length ?? 0;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
       className={cn(
-        'flex flex-col gap-3 rounded-xl border p-3.5 text-left transition-all',
+        'flex flex-col gap-3 rounded-xl border p-3.5 text-left transition-all cursor-pointer outline-none',
+        'focus-visible:ring-2 focus-visible:ring-teal-400/60',
         'bg-[#1A2236] hover:bg-[#1f2940]',
         selected
           ? 'border-teal-400 shadow-[0_0_0_1px_rgba(45,212,191,0.45)]'
@@ -190,6 +198,6 @@ export function LeadCard({ row, rank, selected, onSelect }: Props) {
           </span>
         )}
       </div>
-    </button>
+    </div>
   );
 }
