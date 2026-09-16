@@ -210,9 +210,11 @@ export const client = {
       method: 'POST',
       body: '{}',
     }),
+  /** Used by Settings AI suggest and WorkspaceShell auto-apply on completed. */
   suggestThresholds: (searchId: string) =>
     api<{ data: ThresholdSuggestResponse }>(
       `/searches/${searchId}/suggest-thresholds`,
       { method: 'POST', body: '{}' },
     ),
 };
+

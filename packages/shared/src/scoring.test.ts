@@ -10,8 +10,10 @@ import {
   extractAiResearchFromInferences,
   isThinResearchStatus,
   joinAiFitNarrative,
+  suggestTopKThresholds,
   thinFitNarrativeMessage,
 } from './aiIntelligence.js';
+import type { EvidenceItem, EvidenceSource } from './types.js';
 
 function row(partial: Partial<CsvCompanyRow> & Pick<CsvCompanyRow, 'company_id' | 'company_name'>): CsvCompanyRow {
   return {
@@ -506,5 +508,48 @@ describe('AI intelligence surfaces', () => {
     expect(isThinResearchStatus('ok')).toBe(false);
     expect(thinFitNarrativeMessage('empty')).toMatch(/no usable findings/i);
     expect(thinFitNarrativeMessage('pending')).toMatch(/awaiting AI research/i);
+  });
+});
+
+describe('EvidenceSource deep enrich extensions', () => {
+  it('accepts linkedin/about/news/mention on EvidenceItem', () => {
+    const sources: EvidenceSource[] = [
+      'csv',
+      'criteria',
+      'website',
+      'linkedin',
+      'about',
+      'news',
+      'mention',
+    ];
+    const items: EvidenceItem[] = sources.map((source) => ({
+      field: 'primary_service',
+      value: 'Analytics',
+      source,
+      evidenceQuote: 'Analytics',
+    }));
+    expect(items.map((i) => i.source)).toEqual(sources);
+  });
+});
+
+describe('suggestTopKThresholds', () => {
+  it('sets floors so roughly top-5 pass AND filters', () => {
+    const rows = Array.from({ length: 10 }, (_, i) => ({
+      qualificationScore: 90 - i * 5,
+      similarityScore: 88 - i * 4,
+      evidenceCount: 8 - Math.floor(i / 2),
+    }));
+    const t = suggestTopKThresholds(rows, 5);
+    // 5th best qual = 90-20=70 → floor 69
+    expect(t.minQualification).toBe(69);
+    expect(t.minSimilarity).toBe(71); // 88-16=72 → 71
+    expect(t.minEvidenceCount).toBeGreaterThanOrEqual(0);
+    const passing = rows.filter(
+      (r) =>
+        r.qualificationScore >= t.minQualification &&
+        (r.similarityScore ?? 0) >= t.minSimilarity &&
+        r.evidenceCount >= t.minEvidenceCount,
+    );
+    expect(passing.length).toBeGreaterThanOrEqual(5);
   });
 });

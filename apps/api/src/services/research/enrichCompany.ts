@@ -3,10 +3,11 @@
  * NEVER overwrites existing non-null CSV facts. Quote-checked claims only.
  */
 
-import type { CompanyDna, EvidenceItem } from '@ali/shared';
+import type { CompanyDna, EvidenceItem, EvidenceSource } from '@ali/shared';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import type { AiProvider } from '@ali/shared';
+import { researchDeep } from './deepResearch.js';
 import { researchWebsite } from './websiteResearch.js';
 
 /** Map enrichment field keys → DNA setters (only fill when currently null). */
@@ -316,6 +317,154 @@ export async function persistEnrichedDna(dna: CompanyDna): Promise<void> {
       })),
     });
   }
+}
+
+
+export type DeepEnrichOptions = {
+  linkedinUrl?: string | null;
+  companyName?: string | null;
+};
+
+function sourceLabel(source: EvidenceSource | string): string {
+  return source || 'website';
+}
+
+/**
+ * Deep multi-source enrich for top-K leads (homepage + LinkedIn + about + news/mention).
+ * Same merge rules as enrichCompanyDna; evidence.source mapped per quote section.
+ */
+export async function enrichCompanyDnaDeep(
+  dna: CompanyDna,
+  ai: AiProvider,
+  opts?: DeepEnrichOptions,
+): Promise<{ dna: CompanyDna; didEnrich: boolean }> {
+  if (ai.name === 'noop') {
+    return { dna, didEnrich: false };
+  }
+
+  const website = dna.identity.website;
+  const linkedinUrl = opts?.linkedinUrl ?? null;
+  if (!website && !linkedinUrl) {
+    const next: CompanyDna = structuredClone(dna);
+    stampResearchStatus(next, 'invalid_url', 'Invalid or missing website URL');
+    applyConfidencePenalties(next, 'invalid_url', 0);
+    return { dna: next, didEnrich: true };
+  }
+
+  const unknowns = listUnknowns(dna);
+  const result = await researchDeep(ai, {
+    companyId: dna.companyId,
+    companyName: opts?.companyName ?? dna.identity.name,
+    websiteUrl: website,
+    linkedinUrl,
+    unknowns: unknowns.length
+      ? unknowns
+      : ['customer_profile', 'business_model', 'growth_signal'],
+    existingFacts: dna.facts,
+  });
+
+  const enrichment = result.enrichment;
+  const redFlags = enrichment.redFlags ?? [];
+  const hasFindings =
+    enrichment.filledUnknowns.length > 0 ||
+    enrichment.inferences.length > 0 ||
+    enrichment.narrativeBullets.length > 0 ||
+    redFlags.length > 0;
+
+  const next: CompanyDna = structuredClone(dna);
+  let filledCount = 0;
+
+  let status: 'fetch_failed' | 'invalid_url' | 'ai_error' | 'empty' | 'ok';
+  if (result.skipped === 'fetch_failed') status = 'fetch_failed';
+  else if (result.skipped === 'invalid_url') status = 'invalid_url';
+  else if (result.skipped === 'ai_error') status = 'ai_error';
+  else if (result.skipped === 'ai_noop') status = 'empty';
+  else if (!hasFindings) status = 'empty';
+  else status = 'ok';
+
+  const deepNote = enrichment.researchNote?.trim()
+    ? `deep multi-source; ${enrichment.researchNote.trim()}`
+    : 'deep multi-source enrich';
+  stampResearchStatus(next, status, deepNote, redFlags);
+
+  for (const fill of enrichment.filledUnknowns) {
+    const key = fill.field.trim().toLowerCase().replace(/\s+/g, '_');
+    const meta = FILLABLE_FIELDS[key] ?? FILLABLE_FIELDS[fill.field];
+    const ev = result.evidence.find(
+      (e) => e.field === fill.field && e.evidenceQuote === fill.evidenceQuote,
+    );
+    const src = sourceLabel(ev?.source ?? 'website');
+    if (!meta) {
+      next.inferences.push(
+        `Inference (${src}): ${fill.field}=${fill.value} [quote: ${fill.evidenceQuote.slice(0, 80)}]`,
+      );
+      continue;
+    }
+    const current = meta.get(next);
+    if (current != null && current !== '') {
+      continue;
+    }
+    meta.set(next, fill.value);
+    next.facts.push(meta.factLabel(fill.value).replace('(website)', `(${src})`));
+    filledCount += 1;
+  }
+
+  for (const inf of enrichment.inferences) {
+    const ev = result.evidence.find(
+      (e) => e.value === inf.text && e.evidenceQuote === inf.evidenceQuote,
+    );
+    const src = sourceLabel(ev?.source ?? 'website');
+    const label = inf.field
+      ? `Inference (${src}/${inf.field}): ${inf.text}`
+      : `Inference (${src}): ${inf.text}`;
+    if (!next.inferences.includes(label)) next.inferences.push(label);
+  }
+
+  for (const bullet of enrichment.narrativeBullets) {
+    const label = `Narrative (deep): ${bullet}`;
+    if (!next.inferences.includes(label)) next.inferences.push(label);
+  }
+
+  const seen = new Set(
+    next.evidence.map((e) => `${e.source}|${e.field}|${e.value}|${e.evidenceQuote ?? ''}`),
+  );
+  for (const e of result.evidence) {
+    const k = `${e.source}|${e.field}|${e.value}|${e.evidenceQuote ?? ''}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    next.evidence.push(e);
+  }
+
+  recomputeUnknownsAndConfidence(next);
+  if (status === 'ok' && filledCount > 0) {
+    next.confidence = Math.min(95, next.confidence + Math.min(8, filledCount * 2));
+  }
+  applyConfidencePenalties(next, status, redFlags.length);
+
+  return { dna: next, didEnrich: true };
+}
+
+/**
+ * Deep-enrich many companies sequentially; persist when requested.
+ */
+export async function enrichCompaniesDeep(
+  items: Array<{ dna: CompanyDna; linkedinUrl?: string | null; companyName?: string | null }>,
+  ai: AiProvider,
+  opts?: { persist?: boolean },
+): Promise<Map<string, CompanyDna>> {
+  const out = new Map<string, CompanyDna>();
+  for (const item of items) {
+    const { dna: enriched, didEnrich } = await enrichCompanyDnaDeep(item.dna, ai, {
+      linkedinUrl: item.linkedinUrl,
+      companyName: item.companyName,
+    });
+    out.set(enriched.companyId, enriched);
+    if (opts?.persist) {
+      await persistEnrichedDna(enriched);
+    }
+    void didEnrich;
+  }
+  return out;
 }
 
 /**

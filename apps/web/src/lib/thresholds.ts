@@ -1,4 +1,9 @@
-/** Client-side ranking floors (Settings). Persist in localStorage. */
+/** Client-side ranking floors (Settings + auto-apply on Run). Persist in localStorage.
+ *
+ * Auto-apply (WorkspaceShell): when a search becomes `completed`, once per searchId,
+ * suggestThresholds API (or suggestThresholdsFromResults fallback) → saveThresholds.
+ * Manual Settings edits mark that searchId applied so polls never overwrite.
+ */
 
 export type RankingThresholds = {
   minQualification: number;

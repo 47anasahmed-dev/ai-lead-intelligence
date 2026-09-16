@@ -51,7 +51,7 @@ function emptyEnrichment(unknowns: string[], researchNote?: string): EnrichmentR
   };
 }
 
-function normalizeUrl(raw: string): string | null {
+export function normalizeUrl(raw: string): string | null {
   const t = raw.trim();
   if (!t) return null;
   try {
@@ -83,7 +83,7 @@ export function htmlToText(html: string): string {
   return s;
 }
 
-async function fetchWebsiteText(url: string): Promise<{ text: string; finalUrl: string } | null> {
+export async function fetchWebsiteText(url: string): Promise<{ text: string; finalUrl: string } | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), env.enrichFetchTimeoutMs);
   try {
