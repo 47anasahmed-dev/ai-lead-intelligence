@@ -17,6 +17,7 @@ import { prisma } from '../lib/prisma.js';
 import { createServerAiProvider, isLiveAiEnabled } from './ai/createProvider.js';
 import {
   attachFitNarrativeToSimilarity,
+  buildIdealDnaFallbackSummary,
   generateFitNarrative,
   generateIdealDnaSummary,
 } from './ai/intelligence.js';
@@ -124,10 +125,7 @@ async function runAiIntelligenceLayer(
   dnaById: Map<string, CompanyDna>,
   options?: { referenceDnas?: CompanyDna[] },
 ): Promise<CompanyDna> {
-  if (!isLiveAiEnabled()) return idealDna;
-
   const ai = createServerAiProvider();
-  if (ai.name === 'noop') return idealDna;
 
   const INTELLIGENCE_TIMEOUT_MS = 75_000;
   let nextIdeal = idealDna;
@@ -142,6 +140,10 @@ async function runAiIntelligenceLayer(
         data: { idealDna: nextIdeal as unknown as Prisma.InputJsonValue },
       });
     }
+
+    // A noop provider still writes the evidence-only fallback summary above,
+    // but fit narratives require a live model.
+    if (!isLiveAiEnabled() || ai.name === 'noop') return;
 
     // 2) Fit narratives for hard top-K ranked leads only (additive; scores unchanged)
     const targets = ranked.slice(0, DEEP_ENRICH_TOP_K);
@@ -317,13 +319,20 @@ async function scoreAndPersist(
     return b.similarity.overallScore - a.similarity.overallScore;
   });
 
+  // Persist an evidence-only summary with the deterministic result. The live AI
+  // pass may replace it later, but completed searches are never left without a
+  // durable summary when a provider is unavailable or returns malformed JSON.
+  const idealWithFallback = idealDna.idealDnaSummary
+    ? idealDna
+    : { ...idealDna, idealDnaSummary: buildIdealDnaFallbackSummary(idealDna) };
+
   // Mark completed immediately after deterministic pass so UI never stays on Running
   // if enrichment hangs or the process restarts mid-enrichment.
   await prisma.search.update({
     where: { id: searchId },
     data: {
       status: 'completed',
-      idealDna: idealDna as unknown as Prisma.InputJsonValue,
+      idealDna: idealWithFallback as unknown as Prisma.InputJsonValue,
       completedAt: new Date(),
     },
   });
@@ -414,7 +423,7 @@ async function scoreAndPersist(
   //    before Ideal DNA summary + fit narratives so narratives see richer evidence.
   await runDeepEnrichTopK(
     searchId,
-    idealDna,
+    idealWithFallback,
     ranked,
     dnaById,
     allCompanies,
@@ -424,7 +433,7 @@ async function scoreAndPersist(
   // 4) AI intelligence layer: Ideal DNA summary (once) + fit narratives for top-K only
   const idealWithAi = await runAiIntelligenceLayer(
     searchId,
-    idealDna,
+    idealWithFallback,
     ranked,
     dnaById,
     options,

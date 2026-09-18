@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { CompanyDna } from '@ali/shared';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { env } from '../lib/env.js';
@@ -9,7 +10,10 @@ import {
   extractIdealDnaSummary,
 } from '../lib/resultAiFields.js';
 import { createServerAiProvider } from '../services/ai/createProvider.js';
-import { suggestRankingThresholds } from '../services/ai/intelligence.js';
+import {
+  buildIdealDnaFallbackSummary,
+  suggestRankingThresholds,
+} from '../services/ai/intelligence.js';
 import { companyToDna } from '../services/companyMapper.js';
 import { runSearchAnalysis } from '../services/analysis.js';
 
@@ -19,6 +23,25 @@ async function getDemoUserId() {
   });
   if (!user) throw new Error('Demo user missing — run seed');
   return user.id;
+}
+
+async function ensurePersistedIdealDnaSummary(
+  searchId: string,
+  idealDna: unknown,
+): Promise<{ idealDna: unknown; summary: string | null }> {
+  const existing = extractIdealDnaSummary(idealDna);
+  if (existing) return { idealDna, summary: existing };
+  if (!idealDna || typeof idealDna !== 'object' || Array.isArray(idealDna)) {
+    return { idealDna, summary: null };
+  }
+
+  const summary = buildIdealDnaFallbackSummary(idealDna as CompanyDna);
+  const repaired = { ...idealDna, idealDnaSummary: summary };
+  await prisma.search.update({
+    where: { id: searchId },
+    data: { idealDna: repaired as Prisma.InputJsonValue },
+  });
+  return { idealDna: repaired, summary };
 }
 
 export async function searchRoutes(app: FastifyInstance) {
@@ -167,10 +190,12 @@ export async function searchRoutes(app: FastifyInstance) {
       },
     });
     if (!search) return reply.code(404).send({ error: 'Search not found' });
+    const repaired = await ensurePersistedIdealDnaSummary(search.id, search.idealDna);
     return {
       data: {
         ...search,
-        idealDnaSummary: extractIdealDnaSummary(search.idealDna),
+        idealDna: repaired.idealDna,
+        idealDnaSummary: repaired.summary,
       },
     };
   });
