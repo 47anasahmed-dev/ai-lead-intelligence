@@ -30,12 +30,15 @@ type Props = {
   initialSearchId?: string | null;
 };
 
+const IDEAL_SUMMARY_POLL_TIMEOUT_MS = 5 * 60 * 1000;
+
 export function WorkspaceShell({ initialSearchId = null }: Props) {
   const router = useRouter();
   const [searchId, setSearchId] = useState<string | null>(initialSearchId);
   const [status, setStatus] = useState<string>('');
   const [idealDna, setIdealDna] = useState<CompanyDnaPayload | null>(null);
   const [idealDnaSummary, setIdealDnaSummary] = useState<string | null>(null);
+  const [awaitingIdealSummary, setAwaitingIdealSummary] = useState(false);
   const [references, setReferences] = useState<SearchRefCompany[]>([]);
   const [results, setResults] = useState<ResultRow[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -54,6 +57,20 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
   /** SearchIds that already got auto (or manual) thresholds — avoid poll overwrite. */
   const autoThresholdAppliedRef = useRef<Set<string>>(new Set());
   const autoThresholdInFlightRef = useRef<Set<string>>(new Set());
+  const idealSummaryPollDeadlineRef = useRef(0);
+  const awaitingIdealSummaryRef = useRef(false);
+
+  const beginIdealSummaryPolling = useCallback(() => {
+    idealSummaryPollDeadlineRef.current = Date.now() + IDEAL_SUMMARY_POLL_TIMEOUT_MS;
+    awaitingIdealSummaryRef.current = true;
+    setAwaitingIdealSummary(true);
+  }, []);
+
+  const stopIdealSummaryPolling = useCallback(() => {
+    idealSummaryPollDeadlineRef.current = 0;
+    awaitingIdealSummaryRef.current = false;
+    setAwaitingIdealSummary(false);
+  }, []);
 
   // hydrate thresholds from localStorage
   useEffect(() => {
@@ -87,6 +104,16 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
       r.meta.idealDnaSummary ??
       dna?.idealDnaSummary ??
       null;
+    if (summary) {
+      stopIdealSummaryPolling();
+    } else if (s.data.status === 'running' && !awaitingIdealSummaryRef.current) {
+      beginIdealSummaryPolling();
+    } else if (
+      awaitingIdealSummaryRef.current &&
+      Date.now() >= idealSummaryPollDeadlineRef.current
+    ) {
+      stopIdealSummaryPolling();
+    }
     setIdealDna(
       dna && summary && !dna.idealDnaSummary
         ? { ...dna, idealDnaSummary: summary }
@@ -105,7 +132,7 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
     setTotalCount(r.meta?.totalCount ?? r.meta?.count ?? 0);
     setError(null);
     setInitialLoading(false);
-  }, []);
+  }, [beginIdealSummaryPolling, stopIdealSummaryPolling]);
 
   // Sync initialSearchId / deep-link
   useEffect(() => {
@@ -132,15 +159,17 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
 
   const isRunning = status === 'running';
   const isDraftEmpty = status === 'draft' && totalCount === 0;
-  const shouldPoll = Boolean(searchId) && (isRunning || isDraftEmpty || running);
+  const shouldPoll =
+    Boolean(searchId) && (isRunning || isDraftEmpty || running || awaitingIdealSummary);
 
   useEffect(() => {
     if (!searchId || !shouldPoll) return;
+    const delay = isRunning || isDraftEmpty || running ? 1500 : 5000;
     const id = setInterval(() => {
       void fetchLive(searchId).catch(() => undefined);
-    }, 1500);
+    }, delay);
     return () => clearInterval(id);
-  }, [searchId, shouldPoll, fetchLive]);
+  }, [searchId, shouldPoll, isRunning, isDraftEmpty, running, fetchLive]);
 
   // Auto AI thresholds once per searchId when status → completed (Create & Run → top ~5).
   // Does not block progressive results while Running.
@@ -226,6 +255,8 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
     setError(null);
     setSelection(null);
     setDetailOpen(false);
+    setIdealDnaSummary(null);
+    beginIdealSummaryPolling();
     try {
       const created = await client.createSearch(references.map((r) => r.id));
       const id = created.data.id;
@@ -239,6 +270,7 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
       await fetchLive(id);
       void loadRecent();
     } catch (e) {
+      stopIdealSummaryPolling();
       setError(e instanceof Error ? e.message : 'Run failed');
     } finally {
       setRunning(false);
@@ -246,9 +278,12 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
   }
 
   async function onLoadSearch(id: string) {
+    stopIdealSummaryPolling();
     setError(null);
     setSelection(null);
     setDetailOpen(false);
+    setIdealDna(null);
+    setIdealDnaSummary(null);
     setSearchId(id);
     setInitialLoading(true);
     router.replace(`/?searchId=${id}`, { scroll: false });
@@ -256,6 +291,7 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
       await fetchLive(id);
       void loadRecent();
     } catch (e) {
+      stopIdealSummaryPolling();
       setError(e instanceof Error ? e.message : 'Failed to load search');
       setInitialLoading(false);
     }

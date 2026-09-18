@@ -62,6 +62,38 @@ function idealEvidenceSnippet(ideal: CompanyDna): string {
 }
 
 /**
+ * Evidence-only fallback used when the configured LLM is unavailable or returns
+ * malformed structured output. A search should still have a durable, useful
+ * Ideal DNA summary instead of leaving the UI in an indefinite "Awaiting" state.
+ */
+export function buildIdealDnaFallbackSummary(ideal: CompanyDna): string {
+  const geography = ideal.geography?.region ?? ideal.geography?.country;
+  const focus = [ideal.identity?.industry, ideal.identity?.primaryService]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .map((value) => value.trim());
+
+  const traits = [
+    ideal.customers?.profile ? `serves ${ideal.customers.profile.trim()}` : null,
+    ideal.businessModel?.model
+      ? `uses a ${ideal.businessModel.model.trim()} business model`
+      : null,
+    ideal.size?.employeeRange ? `has ${ideal.size.employeeRange.trim()} employees` : null,
+    ideal.ownership?.type ? `is ${ideal.ownership.type.trim()}` : null,
+    geography ? `operates in ${geography.trim()}` : null,
+    ideal.growth?.signal ? `shows ${ideal.growth.signal.trim()} growth signals` : null,
+  ].filter((value): value is string => Boolean(value));
+
+  const opening = focus.length
+    ? `The ideal customer profile centers on organizations associated with ${focus.join(' and ')}.`
+    : 'The ideal customer profile is based on the selected reference companies.';
+  const detail = traits.length
+    ? `It typically ${traits.join(', ')}.`
+    : 'The available reference data is too limited to establish additional profile traits.';
+
+  return `${opening} ${detail}`;
+}
+
+/**
  * Generate a short fit narrative vs Ideal DNA.
  * If research is thin/empty, returns honest thin status — never invented prose.
  */
@@ -187,8 +219,9 @@ export async function generateIdealDnaSummary(
   idealDna: CompanyDna,
   referenceDnas?: CompanyDna[],
 ): Promise<{ summary: string | null; thin: boolean }> {
+  const fallback = buildIdealDnaFallbackSummary(idealDna);
   if (ai.name === 'noop') {
-    return { summary: null, thin: true };
+    return { summary: fallback, thin: true };
   }
 
   const refBlock =
@@ -234,11 +267,11 @@ ${refBlock}`,
     const thin = Boolean(raw?.thin);
     let summary =
       typeof raw?.idealDnaSummary === 'string' ? raw.idealDnaSummary.trim() : '';
-    if (!summary) return { summary: null, thin: true };
+    if (!summary) return { summary: fallback, thin: true };
     if (summary.length > 900) summary = `${summary.slice(0, 897)}…`;
     return { summary, thin };
   } catch {
-    return { summary: null, thin: true };
+    return { summary: fallback, thin: true };
   }
 }
 
