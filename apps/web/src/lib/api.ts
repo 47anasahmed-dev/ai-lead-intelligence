@@ -35,12 +35,23 @@ export type SearchRefCompany = {
   linkedinUrl?: string | null;
 };
 
+export type StoredRankingThresholds = {
+  minQualification: number;
+  minSimilarity: number;
+  minEvidenceCount: number;
+  source: 'ai' | 'heuristic' | 'manual';
+  rationale: string;
+  message?: string;
+  updatedAt: string;
+};
+
 export type SearchSummary = {
   id: string;
   type: string;
   status: string;
   createdAt: string;
   idealDna?: unknown;
+  rankingThresholds?: StoredRankingThresholds | null;
   references: Array<{ company: SearchRefCompany }>;
   _count?: { qualifications: number };
 };
@@ -153,10 +164,12 @@ export type ThresholdSuggestResponse = {
   minSimilarity: number;
   minEvidenceCount: number;
   rationale: string;
-  source: 'ai' | 'heuristic';
+  source: 'ai' | 'heuristic' | 'manual';
   message?: string;
   searchId?: string;
   resultCount?: number;
+  cached?: boolean;
+  updatedAt?: string;
 };
 
 export const client = {
@@ -215,6 +228,23 @@ export const client = {
     api<{ data: ThresholdSuggestResponse }>(
       `/searches/${searchId}/suggest-thresholds`,
       { method: 'POST', body: '{}' },
+    ),
+  saveThresholds: (
+    searchId: string,
+    thresholds: {
+      minQualification: number;
+      minSimilarity: number;
+      minEvidenceCount: number;
+    },
+    source: 'manual' | 'heuristic' = 'manual',
+    rationale?: string,
+  ) =>
+    api<{ data: StoredRankingThresholds & { searchId: string } }>(
+      `/searches/${searchId}/thresholds`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ ...thresholds, source, rationale }),
+      },
     ),
 };
 

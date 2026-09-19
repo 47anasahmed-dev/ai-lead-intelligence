@@ -70,6 +70,7 @@ model Search {
   type        String   // reference | criteria
   status      String   @default("draft") // draft | running | completed | failed
   idealDna    Json?
+  rankingThresholds Json?
   criteria    Json?
   error       String?
   createdAt   DateTime @default(now())

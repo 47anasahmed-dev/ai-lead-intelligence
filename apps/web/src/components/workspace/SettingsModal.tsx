@@ -66,7 +66,9 @@ export function SettingsModal({
         minEvidenceCount: d.minEvidenceCount,
       });
       const bits = [d.rationale?.trim()].filter(Boolean) as string[];
-      if (d.source === 'heuristic') {
+      if (d.cached) {
+        bits.push('Loaded from this search.');
+      } else if (d.source === 'heuristic') {
         bits.push(d.message?.trim() || 'Local heuristic fallback.');
       } else if (d.message?.trim()) {
         bits.push(d.message.trim());
@@ -100,8 +102,8 @@ export function SettingsModal({
             </h2>
             <p className="mt-1 text-xs text-slate-400">
               Leads must pass <strong className="text-slate-300">all</strong> floors (AND) to appear
-              in ranked list and tallies. Stored in this browser. On Run, floors auto-suggest once
-              per search so ~top 5 show without opening Settings — Save here still wins for that search.
+              in ranked list and tallies. Saved with the active search in the database. On Run,
+              floors are suggested once; reopening the search reuses those saved values.
             </p>
           </div>
           <button

@@ -290,6 +290,7 @@ export async function suggestRankingThresholds(
   ai: AiProvider,
   input: ThresholdSuggestInput,
 ): Promise<ThresholdSuggestResult> {
+  const thresholdAiTimeoutMs = 5_000;
   const topK = DEFAULT_THRESHOLD_TOP_K;
   const heuristic = suggestTopKThresholds(input.rows, topK);
   const fallback = (
@@ -340,7 +341,7 @@ export async function suggestRankingThresholds(
       : '(none provided)';
 
   try {
-    const raw = await ai.generateStructured<{
+    const aiRequest = ai.generateStructured<{
       minQualification?: number;
       minSimilarity?: number;
       minEvidenceCount?: number;
@@ -368,6 +369,16 @@ ${summary}
 HEURISTIC BASELINE (top-${topK} floors — reference; you may adjust thoughtfully toward ~${topK} passing AND):
 ${JSON.stringify(heuristic)}`,
       schema: THRESHOLD_SUGGEST_JSON_SCHEMA,
+    });
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(
+        () => reject(new Error(`Threshold AI request timed out after ${thresholdAiTimeoutMs}ms`)),
+        thresholdAiTimeoutMs,
+      );
+    });
+    const raw = await Promise.race([aiRequest, timeout]).finally(() => {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
     });
 
     const clamped = clampThresholdSuggest(raw ?? {});
