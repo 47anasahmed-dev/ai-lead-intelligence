@@ -11,9 +11,7 @@ import {
   type SearchSummary,
 } from '@/lib/api';
 import {
-  loadThresholds,
   passesThresholds,
-  saveThresholds,
   suggestThresholdsFromResults,
   type RankingThresholds,
 } from '@/lib/thresholds';
@@ -72,11 +70,6 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
     setAwaitingIdealSummary(false);
   }, []);
 
-  // hydrate thresholds from localStorage
-  useEffect(() => {
-    setThresholds(loadThresholds());
-  }, []);
-
   const loadRecent = useCallback(async () => {
     try {
       const res = await client.listSearches();
@@ -95,6 +88,14 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
   const fetchLive = useCallback(async (id: string) => {
     const [s, r] = await Promise.all([client.getSearch(id), client.getResults(id, 200)]);
     setStatus(s.data.status);
+    if (s.data.rankingThresholds) {
+      setThresholds({
+        minQualification: s.data.rankingThresholds.minQualification,
+        minSimilarity: s.data.rankingThresholds.minSimilarity,
+        minEvidenceCount: s.data.rankingThresholds.minEvidenceCount,
+      });
+      autoThresholdAppliedRef.current.add(id);
+    }
     const dna =
       (s.data.idealDna as CompanyDnaPayload | null | undefined) ??
       (r.meta.idealDna as CompanyDnaPayload | null | undefined) ??
@@ -200,13 +201,22 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
           }
         } catch {
           next = suggestThresholdsFromResults(snapshot);
+          try {
+            await client.saveThresholds(
+              id,
+              next,
+              'heuristic',
+              'Local top-five heuristic saved after the threshold suggestion request failed.',
+            );
+          } catch {
+            // Keep the fallback usable if the database is temporarily unavailable.
+          }
         }
         if (cancelled) return;
         // Manual Settings save while in-flight marks the set — do not overwrite.
         if (autoThresholdAppliedRef.current.has(id)) return;
         autoThresholdAppliedRef.current.add(id);
         setThresholds(next);
-        saveThresholds(next);
         setSelection(null);
         setDetailOpen(false);
       } finally {
@@ -262,6 +272,7 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
       const id = created.data.id;
       setSearchId(id);
       setStatus('running');
+      setThresholds(DEFAULT_CLIENT);
       setResults([]);
       setTotalCount(0);
       setIdealDna(null);
@@ -284,6 +295,7 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
     setDetailOpen(false);
     setIdealDna(null);
     setIdealDnaSummary(null);
+    setThresholds(DEFAULT_CLIENT);
     setSearchId(id);
     setInitialLoading(true);
     router.replace(`/?searchId=${id}`, { scroll: false });
@@ -299,9 +311,13 @@ export function WorkspaceShell({ initialSearchId = null }: Props) {
 
   function onThresholdsChange(next: RankingThresholds) {
     setThresholds(next);
-    saveThresholds(next);
     // Treat manual Settings edits as applied for this search so polls never overwrite.
-    if (searchId) autoThresholdAppliedRef.current.add(searchId);
+    if (searchId) {
+      autoThresholdAppliedRef.current.add(searchId);
+      void client
+        .saveThresholds(searchId, next, 'manual')
+        .catch((e) => setError(e instanceof Error ? e.message : 'Failed to save thresholds'));
+    }
     setSelection(null);
     setDetailOpen(false);
   }

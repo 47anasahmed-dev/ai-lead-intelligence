@@ -17,6 +17,26 @@ import {
 import { companyToDna } from '../services/companyMapper.js';
 import { runSearchAnalysis } from '../services/analysis.js';
 
+const thresholdValuesSchema = z.object({
+  minQualification: z.number().int().min(0).max(100),
+  minSimilarity: z.number().int().min(0).max(100),
+  minEvidenceCount: z.number().int().min(0).max(50),
+});
+
+const storedThresholdsSchema = thresholdValuesSchema.extend({
+  source: z.enum(['ai', 'heuristic', 'manual']),
+  rationale: z.string(),
+  message: z.string().optional(),
+  updatedAt: z.string(),
+});
+
+type StoredThresholds = z.infer<typeof storedThresholdsSchema>;
+
+function parseStoredThresholds(value: unknown): StoredThresholds | null {
+  const parsed = storedThresholdsSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
 async function getDemoUserId() {
   const user = await prisma.user.findUnique({
     where: { email: env.demoUserEmail },
@@ -421,6 +441,17 @@ export async function searchRoutes(app: FastifyInstance) {
     const search = await prisma.search.findUnique({ where: { id } });
     if (!search) return reply.code(404).send({ error: 'Search not found' });
 
+    const stored = parseStoredThresholds(search.rankingThresholds);
+    if (stored) {
+      return {
+        data: {
+          ...stored,
+          searchId: id,
+          cached: true,
+        },
+      };
+    }
+
     const quals = await prisma.qualification.findMany({
       where: { searchId: id },
       select: {
@@ -486,13 +517,66 @@ export async function searchRoutes(app: FastifyInstance) {
       searchStatus: search.status,
     });
 
+    const saved: StoredThresholds = {
+      minQualification: suggestion.minQualification,
+      minSimilarity: suggestion.minSimilarity,
+      minEvidenceCount: suggestion.minEvidenceCount,
+      source: suggestion.source,
+      rationale: suggestion.rationale,
+      ...(suggestion.message ? { message: suggestion.message } : {}),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await prisma.search.update({
+      where: { id },
+      data: { rankingThresholds: saved as Prisma.InputJsonValue },
+    });
+
     return {
       data: {
-        ...suggestion,
+        ...saved,
         searchId: id,
         resultCount: rows.length,
+        cached: false,
       },
     };
+  });
+
+  /** Save user-adjusted or deterministic fallback thresholds for one search. */
+  app.put('/searches/:id/thresholds', async (req, reply) => {
+    const { id } = z.object({ id: z.string() }).parse(req.params);
+    const body = thresholdValuesSchema
+      .extend({
+        source: z.enum(['manual', 'heuristic']).default('manual'),
+        rationale: z.string().trim().max(500).optional(),
+      })
+      .parse(req.body);
+
+    const search = await prisma.search.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!search) return reply.code(404).send({ error: 'Search not found' });
+
+    const saved: StoredThresholds = {
+      minQualification: body.minQualification,
+      minSimilarity: body.minSimilarity,
+      minEvidenceCount: body.minEvidenceCount,
+      source: body.source,
+      rationale:
+        body.rationale ??
+        (body.source === 'manual'
+          ? 'Saved by the user for this search.'
+          : 'Saved local heuristic fallback for this search.'),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await prisma.search.update({
+      where: { id },
+      data: { rankingThresholds: saved as Prisma.InputJsonValue },
+    });
+
+    return { data: { ...saved, searchId: id } };
   });
 
 }

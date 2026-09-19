@@ -1,9 +1,4 @@
-/** Client-side ranking floors (Settings + auto-apply on Run). Persist in localStorage.
- *
- * Auto-apply (WorkspaceShell): when a search becomes `completed`, once per searchId,
- * suggestThresholds API (or suggestThresholdsFromResults fallback) → saveThresholds.
- * Manual Settings edits mark that searchId applied so polls never overwrite.
- */
+/** Client-side ranking-floor helpers. Threshold persistence is search-specific in PostgreSQL. */
 
 export type RankingThresholds = {
   minQualification: number;
@@ -16,41 +11,6 @@ export const DEFAULT_THRESHOLDS: RankingThresholds = {
   minSimilarity: 60,
   minEvidenceCount: 2,
 };
-
-const STORAGE_KEY = 'ali.rankingThresholds.v1';
-
-export function loadThresholds(): RankingThresholds {
-  if (typeof window === 'undefined') return { ...DEFAULT_THRESHOLDS };
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_THRESHOLDS };
-    const parsed = JSON.parse(raw) as Partial<RankingThresholds>;
-    return {
-      minQualification: clamp(
-        Number(parsed.minQualification ?? DEFAULT_THRESHOLDS.minQualification),
-        0,
-        100,
-      ),
-      minSimilarity: clamp(
-        Number(parsed.minSimilarity ?? DEFAULT_THRESHOLDS.minSimilarity),
-        0,
-        100,
-      ),
-      minEvidenceCount: clamp(
-        Number(parsed.minEvidenceCount ?? DEFAULT_THRESHOLDS.minEvidenceCount),
-        0,
-        50,
-      ),
-    };
-  } catch {
-    return { ...DEFAULT_THRESHOLDS };
-  }
-}
-
-export function saveThresholds(t: RankingThresholds): void {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(t));
-}
 
 function clamp(n: number, min: number, max: number): number {
   if (Number.isNaN(n)) return min;
