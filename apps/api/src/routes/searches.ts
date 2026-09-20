@@ -28,13 +28,16 @@ const storedThresholdsSchema = thresholdValuesSchema.extend({
   rationale: z.string(),
   message: z.string().optional(),
   updatedAt: z.string(),
+  algorithmVersion: z.number().int().optional(),
 });
 
 type StoredThresholds = z.infer<typeof storedThresholdsSchema>;
 
 function parseStoredThresholds(value: unknown): StoredThresholds | null {
   const parsed = storedThresholdsSchema.safeParse(value);
-  return parsed.success ? parsed.data : null;
+  if (!parsed.success) return null;
+  if (parsed.data.source !== 'manual' && parsed.data.algorithmVersion !== 2) return null;
+  return parsed.data;
 }
 
 async function getDemoUserId() {
@@ -457,13 +460,14 @@ export async function searchRoutes(app: FastifyInstance) {
       select: {
         companyId: true,
         qualificationScore: true,
+        hardExclusion: true,
       },
       orderBy: [{ qualificationScore: 'desc' }, { confidence: 'desc' }],
       take: 500,
     });
 
     const companyIds = quals.map((q) => q.companyId);
-    const [sims, evidenceRows, profiles] = await Promise.all([
+    const [sims, evidenceRows, profiles, companies] = await Promise.all([
       companyIds.length
         ? prisma.similarityResult.findMany({
             where: { searchId: id, companyId: { in: companyIds } },
@@ -473,7 +477,8 @@ export async function searchRoutes(app: FastifyInstance) {
       companyIds.length
         ? prisma.evidence.findMany({
             where: { companyId: { in: companyIds } },
-            select: { companyId: true },
+            select: { companyId: true, field: true, value: true, source: true },
+            orderBy: { createdAt: 'desc' },
           })
         : Promise.resolve([]),
       companyIds.length
@@ -482,32 +487,40 @@ export async function searchRoutes(app: FastifyInstance) {
             select: { companyId: true, dna: true },
           })
         : Promise.resolve([]),
+      companyIds.length
+        ? prisma.company.findMany({ where: { id: { in: companyIds } } })
+        : Promise.resolve([]),
     ]);
 
     const simByCompany = new Map(sims.map((s) => [s.companyId, s.overallScore]));
-    const evidenceCountById = new Map<string, number>();
+    const evidenceById = new Map<string, Array<{ field: string; value: string; source: string }>>();
     for (const row of evidenceRows) {
-      evidenceCountById.set(
-        row.companyId,
-        (evidenceCountById.get(row.companyId) ?? 0) + 1,
-      );
+      const list = evidenceById.get(row.companyId) ?? [];
+      if (list.length < 50) list.push(row);
+      evidenceById.set(row.companyId, list);
     }
-    const dnaEvidenceById = new Map<string, number>();
-    for (const p of profiles) {
-      const dna = p.dna as { evidence?: unknown[] } | null;
-      const n = Array.isArray(dna?.evidence) ? dna.evidence.length : 0;
-      dnaEvidenceById.set(p.companyId, n);
-    }
+    const profileById = new Map(profiles.map((p) => [p.companyId, p]));
+    const companyById = new Map(companies.map((company) => [company.id, company]));
 
-    const rows = quals.map((q) => {
-      const tableCount = evidenceCountById.get(q.companyId) ?? 0;
-      const dnaCount = dnaEvidenceById.get(q.companyId) ?? 0;
-      return {
-        qualificationScore: q.qualificationScore,
-        similarityScore: simByCompany.get(q.companyId) ?? null,
-        evidenceCount: Math.max(tableCount, dnaCount),
-      };
-    });
+    const rows = quals
+      .filter((q) => !q.hardExclusion)
+      .map((q) => {
+        const profile = profileById.get(q.companyId);
+        const company = companyById.get(q.companyId);
+        const liveDna = company ? companyToDna(company) : null;
+        const evidenceCount = resolveEvidence(
+          evidenceById.get(q.companyId) ?? [],
+          profile?.dna as {
+            evidence?: Array<{ field: string; value: string; source: string }>;
+          } | null,
+          liveDna?.evidence,
+        ).length;
+        return {
+          qualificationScore: q.qualificationScore,
+          similarityScore: simByCompany.get(q.companyId) ?? null,
+          evidenceCount,
+        };
+      });
 
     const idealDnaSummary = extractIdealDnaSummary(search.idealDna);
     const ai = createServerAiProvider();
@@ -525,6 +538,7 @@ export async function searchRoutes(app: FastifyInstance) {
       rationale: suggestion.rationale,
       ...(suggestion.message ? { message: suggestion.message } : {}),
       updatedAt: new Date().toISOString(),
+      algorithmVersion: 2,
     };
 
     await prisma.search.update({
@@ -569,6 +583,7 @@ export async function searchRoutes(app: FastifyInstance) {
           ? 'Saved by the user for this search.'
           : 'Saved local heuristic fallback for this search.'),
       updatedAt: new Date().toISOString(),
+      algorithmVersion: 2,
     };
 
     await prisma.search.update({

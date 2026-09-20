@@ -43,6 +43,7 @@ export type StoredRankingThresholds = {
   rationale: string;
   message?: string;
   updatedAt: string;
+  algorithmVersion?: number;
 };
 
 export type SearchSummary = {
