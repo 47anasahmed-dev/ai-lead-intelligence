@@ -552,4 +552,26 @@ describe('suggestTopKThresholds', () => {
     );
     expect(passing.length).toBeGreaterThanOrEqual(5);
   });
+
+  it('uses the same ranked top five for every floor', () => {
+    const rows = [
+      { qualificationScore: 95, similarityScore: 90, evidenceCount: 19 },
+      { qualificationScore: 94, similarityScore: 89, evidenceCount: 18 },
+      { qualificationScore: 93, similarityScore: 88, evidenceCount: 17 },
+      { qualificationScore: 92, similarityScore: 87, evidenceCount: 16 },
+      { qualificationScore: 91, similarityScore: 86, evidenceCount: 15 },
+      { qualificationScore: 50, similarityScore: 50, evidenceCount: 30 },
+      { qualificationScore: 49, similarityScore: 49, evidenceCount: 29 },
+      { qualificationScore: 48, similarityScore: 48, evidenceCount: 28 },
+      { qualificationScore: 47, similarityScore: 47, evidenceCount: 27 },
+      { qualificationScore: 46, similarityScore: 46, evidenceCount: 26 },
+    ];
+
+    const t = suggestTopKThresholds(rows, 5);
+
+    expect(t.minQualification).toBe(90);
+    expect(t.minSimilarity).toBe(85);
+    expect(t.minEvidenceCount).toBe(14);
+    expect(t.minEvidenceCount).toBeLessThan(19);
+  });
 });

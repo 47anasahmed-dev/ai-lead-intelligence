@@ -273,29 +273,27 @@ export function suggestTopKThresholds(
     };
   }
 
-  const quals = rows.map((r) => r.qualificationScore);
-  const sims = rows
-    .map((r) => r.similarityScore)
-    .filter((v): v is number => v != null);
-  const evCounts = rows.map((r) => r.evidenceCount);
-
-  const qK = kthBestDescending(quals, topK);
-  const sK = kthBestDescending(sims, topK);
-  const eK = kthBestDescending(evCounts, topK);
+  // `rows` is already ranked by the caller. Derive every floor from the same
+  // shortlist; independent K-th values can come from different companies and
+  // accidentally exclude the actual top-ranked leads.
+  const shortlist = rows.slice(0, topK);
+  const qFloor = Math.min(...shortlist.map((r) => r.qualificationScore));
+  const sFloor = Math.min(...shortlist.map((r) => r.similarityScore ?? 0));
+  const eFloor = Math.min(...shortlist.map((r) => r.evidenceCount));
 
   // Epsilon so the K-th lead (and usually a few peers) still clears ≥ floors.
   const minQualification = clampInt(
-    qK == null ? defaults.minQualification : Math.max(0, qK - 1),
+    Math.max(0, qFloor - 1),
     0,
     100,
   );
   const minSimilarity = clampInt(
-    sK == null ? defaults.minSimilarity : Math.max(0, sK - 1),
+    Math.max(0, sFloor - 1),
     0,
     100,
   );
   const minEvidenceCount = clampInt(
-    eK == null ? defaults.minEvidenceCount : Math.max(0, eK - 1),
+    Math.max(0, eFloor - 1),
     0,
     50,
   );
@@ -304,7 +302,7 @@ export function suggestTopKThresholds(
     minQualification,
     minSimilarity,
     minEvidenceCount,
-    rationale: `Top-${topK} floors from the current distribution so roughly the top ${topK} leads pass all AND filters (qualification, similarity, and evidence) for a focused outreach shortlist.`,
+    rationale: `Floors use the lowest qualification, similarity, and evidence values among the same top ${shortlist.length} ranked leads so that shortlist clears all AND filters.`,
   };
 }
 
