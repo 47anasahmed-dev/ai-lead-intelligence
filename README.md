@@ -4,8 +4,6 @@ SaaSquatch 5-hour assessment MVP — **reference-company vertical slice**.
 
 Select 1–5 reference companies → Company DNA → Ideal DNA → deterministic filter → similarity → qualification → confidence → recommendation → ranked results → company detail.
 
-**Frozen contracts:** [`PHASE0-CONTRACTS.md`](./PHASE0-CONTRACTS.md) / [`docs/PHASE0-CONTRACTS.md`](./docs/PHASE0-CONTRACTS.md)
-
 ## Stack
 
 | Layer | Tech |
@@ -136,11 +134,3 @@ pnpm --filter @ali/shared test
 
 3. **Data APIs** — LinkedIn official API and/or third-party company data APIs (Apollo, Clearbit, etc.) would improve coverage and depth many-fold (About blurbs, funding, firmographics) without scraping login walls.
 4. **Stronger models** — larger / upgraded AI models (or provider upgrades) would improve Ideal DNA narratives, merge quality, and evidence extraction — still under anti-hallucination (quotes from fetched sources only).
-
-## Demo script (~90s)
-
-1. Open dashboard → **New reference search**.
-2. Filter “SaaS”, select 3 peers → **Create & run**.
-3. Show ranked table (qualification, similarity, confidence, recommendation); ~top-5 thresholds auto-apply when AI is live.
-4. Open top lead → DNA facts / inferences / unknowns / multi-source evidence (after deep enrich).
-5. Call out: explainability + no `demo_fit` leakage; refresh evidence merges, does not wipe.
